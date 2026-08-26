@@ -1,0 +1,7 @@
+{
+  "standard": {
+    "name": "Standard Armament",
+    "range": 1.0,
+    "indirect_fire": false
+  }
+}

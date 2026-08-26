@@ -2,437 +2,402 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>CDC Scenario Architect | GUI Database Editor</title>
+    <title>CDC DLC Builder</title>
     <link rel="stylesheet" href="/static/css/style.css" />
     <style>
-        body { padding: 0; margin: 0; background-color: #050a0f; color: #c9d1d9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; flex-direction: column; height: 100vh; overflow: hidden;}
-        #header { background: #161b22; border-bottom: 1px solid #30363d; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; z-index: 10; box-shadow: 0 4px 10px rgba(0,0,0,0.5);}
-        #workspace { display: flex; flex-grow: 1; overflow: hidden; }
-        
-        /* Sidebar Navigation | 侧边栏导航 */
-        .sidebar { width: 250px; background: #0d1117; border-right: 1px solid #30363d; display: flex; flex-direction: column; overflow-y: auto;}
-        .sidebar-category { color: #8b949e; font-size: 11px; font-weight: bold; text-transform: uppercase; padding: 15px 15px 5px 15px; letter-spacing: 1px; }
-        .nav-btn { background: transparent; color: #c9d1d9; border: none; padding: 10px 15px; text-align: left; cursor: pointer; font-size: 14px; border-left: 3px solid transparent; transition: 0.2s;}
-        .nav-btn:hover { background: #161b22; }
-        .nav-btn.active { background: #1f6feb20; border-left-color: #58a6ff; color: #58a6ff; font-weight: bold; }
-
-        /* Master-Detail Layout | 主从视图布局 */
-        .content-area { flex-grow: 1; display: flex; background: #010409;}
-        .master-list { width: 280px; border-right: 1px solid #30363d; background: #0d1117; display: flex; flex-direction: column;}
-        .list-header { padding: 10px; border-bottom: 1px solid #30363d; display: flex; justify-content: space-between; align-items: center; background: #161b22;}
-        .list-items { flex-grow: 1; overflow-y: auto; }
-        .list-item { padding: 12px 15px; border-bottom: 1px solid #21262d; cursor: pointer; display: flex; flex-direction: column; gap: 3px;}
-        .list-item:hover { background: #161b22; }
-        .list-item.selected { background: #1f6feb20; border-left: 3px solid #58a6ff; }
-        .item-title { font-weight: bold; color: #c9d1d9; font-size: 14px;}
-        .item-sub { color: #8b949e; font-size: 11px; }
-
-        /* Detail Form Area | 详情表单区 */
-        .detail-pane { flex-grow: 1; padding: 25px; overflow-y: auto; }
-        .form-section { border: 1px solid #30363d; border-radius: 6px; background: #0d1117; margin-bottom: 20px; padding: 20px;}
-        .section-title { color: #58a6ff; font-weight: bold; font-size: 16px; margin-bottom: 15px; border-bottom: 1px solid #21262d; padding-bottom: 8px;}
-        
-        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-        .form-group { display: flex; flex-direction: column; gap: 5px; }
-        .form-group.full { grid-column: span 2; }
-        .form-group label { color: #8b949e; font-size: 12px; font-weight: bold; }
-        .form-group input, .form-group select { background: #010409; border: 1px solid #30363d; color: #c9d1d9; padding: 8px 10px; border-radius: 4px; font-size: 14px; outline: none;}
-        .form-group input:focus, .form-group select:focus { border-color: #58a6ff; }
-        
-        /* GUI Buttons | 图形界面按钮 */
-        .gui-btn { background: #238636; color: white; border: 1px solid rgba(240,246,252,0.1); border-radius: 6px; padding: 6px 12px; cursor: pointer; font-weight: 500; font-family: inherit; }
-        .gui-btn:hover { background: #2ea043; }
-        .gui-btn.danger { background: #da3633; }
-        .gui-btn.danger:hover { background: #f85149; }
-        
-        .empty-state { height: 100%; display: flex; align-items: center; justify-content: center; color: #8b949e; font-style: italic; }
+        body { margin:0; background:#050a0f; color:#c9d1d9; font-family:"Segoe UI", Arial, sans-serif; overflow:hidden; user-select:text; }
+        #header { height:58px; display:flex; align-items:center; justify-content:space-between; padding:0 20px; background:#0d1117; border-bottom:1px solid #30363d; }
+        #workspace { display:grid; grid-template-columns:260px 1fr; height:calc(100vh - 59px); }
+        #sidebar { background:#0d1117; border-right:1px solid #30363d; padding:12px; overflow-y:auto; }
+        #content { overflow-y:auto; padding:22px; }
+        .nav-btn { width:100%; text-align:left; margin-bottom:7px; padding:10px; border:1px solid #30363d; background:#010409; color:#c9d1d9; border-radius:4px; cursor:pointer; }
+        .nav-btn.active { border-color:#58a6ff; color:#58a6ff; background:#1f6feb20; }
+        .section { border:1px solid #30363d; background:#0d1117; border-radius:6px; padding:16px; margin-bottom:16px; }
+        .section h2 { margin:0 0 10px; color:#58a6ff; font-size:18px; }
+        .hint { color:#8b949e; font-size:12px; line-height:1.45; margin-bottom:12px; }
+        .grid { display:grid; grid-template-columns:repeat(2, minmax(220px, 1fr)); gap:12px; }
+        .grid.three { grid-template-columns:repeat(3, minmax(180px, 1fr)); }
+        label { color:#8b949e; font-size:12px; font-weight:600; display:block; margin-bottom:4px; }
+        input, select, textarea { width:100%; box-sizing:border-box; background:#010409; color:#c9d1d9; border:1px solid #30363d; border-radius:4px; padding:8px; font-family:inherit; }
+        textarea { min-height:76px; resize:vertical; }
+        .btn { border:1px solid #2ea043; background:#238636; color:#fff; border-radius:4px; padding:8px 12px; cursor:pointer; font-weight:600; }
+        .btn.secondary { background:#1f6feb; border-color:#58a6ff; }
+        .btn.warn { background:#9a6700; border-color:#e3b341; }
+        .btn.danger { background:#da3633; border-color:#f85149; }
+        .toolbar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+        .card { border:1px solid #30363d; background:#010409; padding:12px; border-radius:5px; margin-bottom:10px; }
+        .card-title { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; }
+        .small { font-size:12px; color:#8b949e; }
+        .pill { display:inline-block; border:1px solid #30363d; border-radius:999px; padding:2px 8px; margin:2px; color:#8b949e; font-size:11px; }
+        .zh-only { display:none; }
+        body.zh .en-only { display:none; }
+        body.zh .zh-only { display:inline; }
     </style>
 </head>
 <body>
-
-<div id="crt-overlay"></div>
-
 <div id="header">
     <div>
-        <h2 style="margin: 0; color: #c9d1d9;">CDC <span style="color: #58a6ff;" id="ui-title">DATABASE ARCHITECT</span></h2>
-        <div style="color: #8b949e; font-size: 12px;" id="ui-subtitle">GUI Database Editor v1.0 | Military-Grade Modding Tool</div>
+        <div style="font-size:20px; font-weight:700; color:#fff;">CDC DLC Builder <span class="zh-only">/ 剧本生成器</span></div>
+        <div class="small">No-code scenario package creator for MUN chairs / 面向主席团的无代码剧本工具</div>
     </div>
-    <div style="display: flex; gap: 10px; align-items: center;">
-        <button class="gui-btn" style="background: transparent; border-color: #58a6ff; color: #58a6ff;" onclick="toggleLang()">🌍 EN / 中</button>
-        <button class="gui-btn" style="background: #1f6feb;" onclick="exportAll()" id="ui-export">💾 Export DLC Package (.zip)</button>
+    <div class="toolbar" style="margin:0;">
+        <button class="btn secondary" onclick="toggleLanguage()">EN / 中文</button>
+        <button class="btn warn" onclick="loadTemplate('crisis')">Load Crisis Template</button>
+        <button class="btn secondary" onclick="validateDlc()">Check Package</button>
+        <button class="btn" onclick="exportAll()">Export DLC Zip</button>
     </div>
 </div>
 
 <div id="workspace">
-    <div class="sidebar">
-        <div class="sidebar-category" id="nav-cat-1">DATABASE</div>
-        <button class="nav-btn active" onclick="switchTab('scenario')" id="nav-scenario">🌍 Campaign Settings</button>
-        <button class="nav-btn" onclick="switchTab('units')" id="nav-units">🪖 Order of Battle (OOB)</button>
-        <div class="sidebar-category" id="nav-cat-2">PHYSICS & RULES</div>
-        <button class="nav-btn" onclick="switchTab('battalions')" id="nav-battalions">📊 Battalion Types</button>
-        <button class="nav-btn" onclick="switchTab('weapons')" id="nav-weapons">🔫 Armory & Ranges</button>
+    <div id="sidebar">
+        <button class="nav-btn active" onclick="switchTab('start', this)">1. Start / 开始</button>
+        <button class="nav-btn" onclick="switchTab('scenario', this)">2. Scenario & Map / 剧本地图</button>
+        <button class="nav-btn" onclick="switchTab('rules', this)">3. Simulation Rules / 推演规则</button>
+        <button class="nav-btn" onclick="switchTab('committee', this)">4. Committee / 委员会</button>
+        <button class="nav-btn" onclick="switchTab('diplomacy', this)">5. Diplomacy / 外交阵营</button>
+        <button class="nav-btn" onclick="switchTab('units', this)">6. Units / 部队</button>
+        <button class="nav-btn" onclick="switchTab('battalions', this)">7. Battalion Types / 营种</button>
+        <button class="nav-btn" onclick="switchTab('weapons', this)">8. Weapons / 武器</button>
+        <button class="nav-btn" onclick="switchTab('export', this)">9. Export / 导出</button>
     </div>
-
-    <div class="content-area" id="main-editor">
-        </div>
+    <div id="content"></div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-
 <script>
-    /**
-     * @fileoverview CDC Scenario Architect Core Logic
-     * Handles data binding, i18n translation, and zip compilation.
-     * CDC 战区架构师核心逻辑：处理数据绑定、国际化翻译以及 Zip 打包。
-     */
+let db = null;
 
-    // ==========================================
-    // 1. I18N DICTIONARY | 国际化字典
-    // ==========================================
-    const i18n = {
-        en: {
-            title: "DATABASE ARCHITECT", sub: "GUI Database Editor v1.0 | Military-Grade Modding Tool", export: "💾 Export DLC Package (.zip)",
-            cat1: "DATABASE", cat2: "PHYSICS & RULES", nav_scen: "🌍 Campaign Settings", nav_unit: "🪖 Order of Battle (OOB)", nav_bat: "📊 Battalion Types", nav_wea: "🔫 Armory & Ranges",
-            scen_info: "General Briefing", scen_name: "Scenario Name", scen_desc: "Description (Shown in Bootloader)",
-            scen_bounds: "Map Boundaries (Coordinates)", lon_min: "Min Longitude (West)", lon_max: "Max Longitude (East)", lat_min: "Min Latitude (South)", lat_max: "Max Latitude (North)",
-            list_title: "Entries", btn_add: "Add New", empty_state: "Select an item from the list to edit.",
-            unit_id: "Unit Identity", del: "🗑️ Delete", uid: "Internal ID", uname: "Display Name", ufac: "Faction", uicon: "Custom Icon (Emoji/Text)", utype: "Unit Type",
-            upos: "Deployment & Posture", ulon: "Initial Longitude", ulat: "Initial Latitude", ustance: "Default Stance", uwea: "Primary Weapon",
-            ucomp: "Order of Battle (Composition)", ucomp_sub: "Enter the number of battalions. Base stats calculate dynamically.",
-            wea_param: "Weapon Parameters", wea_name: "Weapon Name", wea_range: "Effective Range (km)",
-            bat_stat: "Battalion Physics & Stats", bat_name: "Battalion Name", bat_spd: "Base Speed (km/h)", bat_ter: "Terrain Efficiency (0.1-2.0)",
-            bat_soft: "Soft Attack", bat_hard: "Hard Attack (Anti-Armor)", bat_arm: "Armor Thickness", bat_def: "Defense", bat_org: "Organization (Morale Base)"
-        },
-        zh: {
-            title: "战区架构师", sub: "GUI 数据库编辑器 v1.0 | 军用级剧本开发工具", export: "💾 导出 DLC 全量数据包 (.zip)",
-            cat1: "剧本数据库", cat2: "物理与规则", nav_scen: "🌍 战役全局设置", nav_unit: "🪖 战斗序列 (OOB)", nav_bat: "📊 兵种数值库", nav_wea: "🔫 兵器谱与射程",
-            scen_info: "战役基本信息", scen_name: "战役名称", scen_desc: "背景描述 (显示在启动界面)",
-            scen_bounds: "地理空间边界 (经纬度)", lon_min: "最小经度 (西界)", lon_max: "最大经度 (东界)", lat_min: "最小纬度 (南界)", lat_max: "最大纬度 (北界)",
-            list_title: "条目列表", btn_add: "新增条目", empty_state: "请从左侧列表选择条目进行编辑",
-            unit_id: "单位身份标识", del: "🗑️ 删除", uid: "唯一 ID (不可重复)", uname: "显示名称", ufac: "所属阵营", uicon: "自定义雷达图标 (Emoji 或 文本)", utype: "单位类型",
-            upos: "部署坐标与姿态", ulon: "初始经度", ulat: "初始纬度", ustance: "初始战术姿态", uwea: "主战武装",
-            ucomp: "建制构成 (营级数量)", ucomp_sub: "输入各营的数量，系统将基于此自动推算部队的综合战斗力。",
-            wea_param: "武器物理参数", wea_name: "武器显示名称", wea_range: "作战射程 (公里)",
-            bat_stat: "兵种物理素质库", bat_name: "兵种名称", bat_spd: "基础速度 (km/h)", bat_ter: "地形适应力 (0.1 - 2.0)",
-            bat_soft: "软目标杀伤 (Soft)", bat_hard: "硬目标杀伤 (Hard)", bat_arm: "护甲厚度 (Armor)", bat_def: "防御强度 (Defense)", bat_org: "基础组织度 (Org)"
+let currentTab = "start";
+let mapFiles = { dem: [], roads: null, rivers: null, provinces: null };
+
+function byId(id) { return document.getElementById(id); }
+function esc(value) { return String(value ?? "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;"); }
+function n(value, fallback=0) { const parsed = parseFloat(value); return Number.isFinite(parsed) ? parsed : fallback; }
+function validId(value) { return /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}$/.test(value || ""); }
+function switchTab(tab, btn) {
+    currentTab = tab;
+    document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
+    if (btn) btn.classList.add("active");
+    render();
+}
+function toggleLanguage() { document.body.classList.toggle("zh"); }
+function setPath(obj, path, value) {
+    const parts = path.split(".");
+    let target = obj;
+    while (parts.length > 1) target = target[parts.shift()];
+    target[parts[0]] = value;
+}
+function input(label, path, value, type="text", step="") {
+    const sync = path.startsWith("rules.") ? "; syncRulesJson()" : "";
+    return `<div><label>${label}</label><input type="${type}" ${step ? `step="${step}"` : ""} value="${esc(value)}" onchange="setPath(db, '${path}', this.type==='number' ? n(this.value) : this.value)${sync}"></div>`;
+}
+function textarea(label, path, value) {
+    return `<div style="grid-column:1/-1;"><label>${label}</label><textarea onchange="setPath(db, '${path}', this.value)">${esc(value)}</textarea></div>`;
+}
+function render() {
+    if (!db) {
+        byId("content").innerHTML = `<div class="section"><h2>Loading DLC starter package…</h2></div>`;
+        return;
+    }
+    const renders = { start: renderStart, scenario: renderScenario, rules: renderRules, committee: renderCommittee, diplomacy: renderDiplomacy, units: renderUnits, battalions: renderBattalions, weapons: renderWeapons, export: renderExport };
+    byId("content").innerHTML = renders[currentTab]();
+}
+
+function renderStart() {
+    return `<div class="section">
+        <h2>Chair-Friendly DLC Builder <span class="zh-only">/ 主席团无代码 DLC 生成器</span></h2>
+        <p class="hint">Fill the tabs from top to bottom. Export creates battle data and special simulation rules that run on the simulator's shared command doctrine.</p>
+        <div class="grid">
+            <div class="card"><b>1. Scenario & Map</b><p class="small">Name the committee and define map bounds.</p></div>
+            <div class="card"><b>2. Simulation Rules</b><p class="small">Tune clock, readiness, detection, combat, missions, routing, and political influence.</p></div>
+            <div class="card"><b>3. Committee</b><p class="small">Add delegate roles, procedure, victory conditions, and staff notes.</p></div>
+            <div class="card"><b>4. Diplomacy</b><p class="small">Group factions that start as allies.</p></div>
+            <div class="card"><b>5. Units</b><p class="small">Place battle units using DLC-defined types and core combat stances.</p></div>
+            <div class="card"><b>6. Battalion Types</b><p class="small">Define combat, recon, logistics, and capability data.</p></div>
+            <div class="card"><b>7. Weapons</b><p class="small">Define weapon ranges and direct or indirect fire.</p></div>
+        </div>
+        <div class="section"><h2>Map File Rules</h2>
+        <p class="hint">Optional map files can be attached in Scenario & Map. DEM files are placed in <code>maps/dem_tiles</code>. Roads, rivers, and province files are placed in <code>maps</code>.</p></div>
+    </div>`;
+}
+
+function renderScenario() {
+    const s = db.scenario, b = s.map_config.bounds;
+    return `<div class="section"><h2>Scenario & Map / 剧本与地图</h2>
+        <div class="grid">
+            ${input("Scenario Name / 剧本名称", "scenario.scenario_name", s.scenario_name)}
+            ${input("Description / 简介", "scenario.description", s.description)}
+            ${input("Map Center Latitude / 地图中心纬度", "scenario.map_center.0", s.map_center[0], "number", "0.001")}
+            ${input("Map Center Longitude / 地图中心经度", "scenario.map_center.1", s.map_center[1], "number", "0.001")}
+            ${input("Map Zoom / 地图缩放", "scenario.map_zoom", s.map_zoom, "number", "1")}
+            ${input("Grid Width / 网格宽", "scenario.map_config.grid_resolution.0", s.map_config.grid_resolution[0], "number", "1")}
+            ${input("Grid Height / 网格高", "scenario.map_config.grid_resolution.1", s.map_config.grid_resolution[1], "number", "1")}
+            ${input("DEM Analysis Width / 高程分析宽", "scenario.map_config.dem_analysis_resolution.0", s.map_config.dem_analysis_resolution?.[0] || 1200, "number", "1")}
+            ${input("DEM Analysis Height / 高程分析高", "scenario.map_config.dem_analysis_resolution.1", s.map_config.dem_analysis_resolution?.[1] || 1200, "number", "1")}
+            ${input("Min Lon / 最小经度", "scenario.map_config.bounds.min_lon", b.min_lon, "number", "0.001")}
+            ${input("Max Lon / 最大经度", "scenario.map_config.bounds.max_lon", b.max_lon, "number", "0.001")}
+            ${input("Min Lat / 最小纬度", "scenario.map_config.bounds.min_lat", b.min_lat, "number", "0.001")}
+            ${input("Max Lat / 最大纬度", "scenario.map_config.bounds.max_lat", b.max_lat, "number", "0.001")}
+            ${input("Province Name Property / 省名字段", "scenario.map_config.province_name_property", s.map_config.province_name_property || "")}
+            ${input("Fallback Elevation m / 默认海拔", "scenario.map_config.fallback_elevation_m", s.map_config.fallback_elevation_m ?? 0, "number", "1")}
+        </div>
+    </div>
+    <div class="section"><h2>Optional Map Files / 可选地图文件</h2>
+        <p class="hint">You may export a playable DLC without map files. The simulator will use fallback terrain. For serious committees, add DEM/province/road files.</p>
+        <div class="grid">
+            <div><label>DEM tiles (.tif, multiple) / 高程瓦片</label><input type="file" multiple accept=".tif,.tiff" onchange="mapFiles.dem = Array.from(this.files)"></div>
+            <div><label>Road raster/vector / 道路文件</label><input type="file" accept=".tif,.tiff,.geojson,.json" onchange="mapFiles.roads = this.files[0] || null"></div>
+            <div><label>River geojson / 河流文件</label><input type="file" accept=".geojson,.json" onchange="mapFiles.rivers = this.files[0] || null"></div>
+            <div><label>Province geojson / 省界文件</label><input type="file" accept=".geojson,.json" onchange="mapFiles.provinces = this.files[0] || null"></div>
+        </div>
+    </div>`;
+}
+
+function renderRules() {
+    const r = db.rules;
+    const stanceNames = Object.values(db.doctrine.stances).map(profile => profile.label).join(", ");
+    const orderNames = Object.values(db.doctrine.orders.modes).map(profile => profile.label).join(", ");
+    return `<div class="section"><h2>Simulation Rules / 推演规则</h2>
+        <p class="hint">These are scenario-specific values. Tactical orders, combat stances, and their interaction are shared core doctrine and are not duplicated in a DLC.</p>
+        <div class="card"><b>Core doctrine (read only)</b><p class="small">Orders: ${esc(orderNames)}</p><p class="small">Stances: ${esc(stanceNames)}</p></div>
+        <div class="grid three">
+            ${input("Game seconds per real second", "rules.clock.game_seconds_per_real_second", r.clock.game_seconds_per_real_second, "number", "0.1")}
+            ${input("Minimum speed multiplier", "rules.clock.speed_multiplier_min", r.clock.speed_multiplier_min, "number", "0.1")}
+            ${input("Maximum speed multiplier", "rules.clock.speed_multiplier_max", r.clock.speed_multiplier_max, "number", "0.1")}
+            ${input("Detection probability scale", "rules.detection.probability_scale", r.detection.probability_scale, "number", "0.1")}
+            ${input("Contact memory hours", "rules.detection.contact_ttl_hours", r.detection.contact_ttl_hours, "number", "0.1")}
+            ${input("Direct combat attack scale", "rules.combat.direct.attack_scale", r.combat.direct.attack_scale, "number", "0.01")}
+            ${input("Routing morale threshold", "rules.combat.routing.morale_threshold", r.combat.routing.morale_threshold, "number", "1")}
+            ${input("Bombard casualty coefficient", "rules.missions.bombard.casualty_coefficient", r.missions.bombard.casualty_coefficient, "number", "0.0001")}
+            ${input("Airstrike casualty coefficient", "rules.missions.airstrike.casualty_coefficient", r.missions.airstrike.casualty_coefficient, "number", "0.01")}
+            ${input("Influence shift per hour", "rules.political_influence.shift_per_reference_unit_hour", r.political_influence.shift_per_reference_unit_hour, "number", "0.1")}
+        </div>
+    </div>
+    <div class="section"><h2>Advanced Rules JSON</h2>
+        <p class="hint">Edit the DLC contract here to add battle-specific unit types, capabilities, or detailed coefficients. Core orders and stances cannot be overridden.</p>
+        <textarea id="rules-json" style="min-height:520px; font-family:Consolas, monospace;">${esc(JSON.stringify(r, null, 2))}</textarea>
+        <div class="toolbar" style="margin-top:10px;"><button class="btn secondary" onclick="applyRulesJson()">Apply Advanced JSON</button></div>
+    </div>`;
+}
+
+function syncRulesJson() {
+    const editor = byId("rules-json");
+    if (editor) editor.value = JSON.stringify(db.rules, null, 2);
+}
+
+function applyRulesJson() {
+    try {
+        const parsed = JSON.parse(byId("rules-json").value);
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Rules root must be an object.");
+        if (parsed.schema_version !== 1) throw new Error("schema_version must be 1.");
+        const requiredObjects = ["clock", "unit_defaults", "unit_types", "detection", "combat", "missions", "political_influence"];
+        for (const key of requiredObjects) {
+            if (!parsed[key] || typeof parsed[key] !== "object" || Array.isArray(parsed[key])) throw new Error(`Missing required object: ${key}`);
         }
-    };
-
-    let currentLang = localStorage.getItem('cdc_lang') || 'en';
-
-    /**
-     * Retrieves the translated string for a given key.
-     * 获取指定键值的本地化翻译字符串。
-     * @param {string} key - Dictionary key | 字典键名
-     * @returns {string} Translated text | 翻译后的文本
-     */
-    function t(key) {
-        return i18n[currentLang][key] || key;
+        if (parsed.orders || parsed.stances) throw new Error("orders and stances belong to core doctrine and must not be stored in rules.json.");
+        if (!parsed.combat.direct || !parsed.combat.routing || !parsed.missions.bombard || !parsed.missions.airstrike) throw new Error("Combat and mission rule sections are incomplete.");
+        db.rules = parsed;
+        alert("Rules JSON applied. Run Check Package before export.");
+        render();
+    } catch (error) {
+        alert("Rules JSON rejected: " + error.message);
     }
+}
 
-    /**
-     * Toggles the global interface language and re-renders the UI.
-     * 切换全局界面语言并重新渲染 UI。
-     */
-    function toggleLang() {
-        currentLang = currentLang === 'en' ? 'zh' : 'en';
-        localStorage.setItem('cdc_lang', currentLang);
-        updateStaticUI();
-        renderView();
+function renderCommittee() {
+    const c = db.scenario.committee;
+    return `<div class="section"><h2>Committee Settings / 委员会设置</h2><div class="grid">
+        ${input("Committee Name / 委员会名称", "scenario.committee.committee_name", c.committee_name)}
+        ${input("Committee Type / 委员会类型", "scenario.committee.committee_type", c.committee_type)}
+        ${input("Simulation Scope / 推演范围", "scenario.committee.simulation_scope", c.simulation_scope)}
+        ${input("Start Date or Turn / 起始日期", "scenario.committee.start_date", c.start_date)}
+        ${input("Chair Visibility / 主席可见性", "scenario.committee.chair_visibility", c.chair_visibility)}
+        ${input("Delegate Visibility / 代表可见性", "scenario.committee.delegate_visibility", c.delegate_visibility)}
+        ${textarea("Public Briefing / 公开背景", "scenario.committee.public_briefing", c.public_briefing)}
+        ${textarea("Staff Notes / 主席团私密备注", "scenario.committee.staff_notes", c.staff_notes)}
+    </div></div>
+    ${renderStringList("Rules of Engagement / 议事与交战规则", c.rules_of_engagement, "rules_of_engagement")}
+    ${renderStringList("Victory Conditions / 胜利目标", c.victory_conditions, "victory_conditions")}
+    ${renderRoles()}`;
+}
+
+function renderStringList(title, list, key) {
+    return `<div class="section"><h2>${title}</h2><div class="toolbar"><button class="btn secondary" onclick="db.scenario.committee.${key}.push('New item'); render()">Add</button></div>
+        ${list.map((item, i) => `<div class="card"><div class="grid"><input value="${esc(item)}" onchange="db.scenario.committee.${key}[${i}] = this.value"><button class="btn danger" onclick="db.scenario.committee.${key}.splice(${i},1); render()">Delete</button></div></div>`).join("")}
+    </div>`;
+}
+
+function renderRoles() {
+    const roles = db.scenario.committee.delegate_roles;
+    return `<div class="section"><h2>Delegate Roles / 代表角色</h2><div class="toolbar"><button class="btn secondary" onclick="rolesAdd()">Add Role</button></div>
+        ${roles.map((r, i) => `<div class="card"><div class="card-title"><b>${esc(r.faction || "Faction")}</b><button class="btn danger" onclick="db.scenario.committee.delegate_roles.splice(${i},1); render()">Delete</button></div>
+            <div class="grid">${roleInput(i, "faction", r.faction, "Faction / 阵营")}${roleInput(i, "role", r.role, "Role / 角色")}${roleInput(i, "briefing", r.briefing, "Briefing / 简报")}</div></div>`).join("")}
+    </div>`;
+}
+function roleInput(i, key, value, label) { return `<div><label>${label}</label><input value="${esc(value)}" onchange="db.scenario.committee.delegate_roles[${i}].${key}=this.value"></div>`; }
+function rolesAdd() { db.scenario.committee.delegate_roles.push({faction:"NEW_FACTION", role:"Delegate Role", briefing:"Private role briefing."}); render(); }
+
+function renderDiplomacy() {
+    return `<div class="section"><h2>Diplomacy Blocs / 外交阵营</h2><p class="hint">Members inside the same bloc begin allied. Put faction names separated by commas.</p>
+    <div class="toolbar"><button class="btn secondary" onclick="db.scenario.diplomacy_blocs.push({bloc_name:'New Bloc', members:['Faction A']}); render()">Add Bloc</button></div>
+    ${db.scenario.diplomacy_blocs.map((b, i) => `<div class="card"><div class="grid">
+        <div><label>Bloc Name / 阵营名</label><input value="${esc(b.bloc_name)}" onchange="db.scenario.diplomacy_blocs[${i}].bloc_name=this.value"></div>
+        <div><label>Members / 成员</label><input value="${esc(b.members.join(', '))}" onchange="db.scenario.diplomacy_blocs[${i}].members=this.value.split(',').map(x=>x.trim()).filter(Boolean)"></div>
+        <button class="btn danger" onclick="db.scenario.diplomacy_blocs.splice(${i},1); render()">Delete</button>
+    </div></div>`).join("")}</div>`;
+}
+
+function renderUnits() {
+    return `<div class="section"><h2>Units / 部队</h2><div class="toolbar"><button class="btn secondary" onclick="addUnit()">Add Unit</button></div>
+        ${Object.entries(db.units).map(([id, u]) => renderUnitCard(id, u)).join("")}</div>`;
+}
+function renderUnitCard(id, u) {
+    const stanceOptions = Object.entries(db.doctrine.stances).map(([v, profile]) => `<option value="${v}" ${u.stance===v?"selected":""}>${esc(profile.label || v)}</option>`).join("");
+    const typeOptions = Object.entries(db.rules.unit_types).map(([v, profile]) => `<option value="${v}" ${u.unit_type===v?"selected":""}>${esc(profile.label || v)}</option>`).join("");
+    const weaponOptions = Object.keys(db.weapons).map(w => `<option value="${w}" ${u.primary_weapon===w?"selected":""}>${w}</option>`).join("");
+    const comp = Object.keys(db.battalions).map(b => `<div><label>${db.battalions[b].name} (${b})</label><input type="number" value="${u.composition?.[b] || 0}" onchange="setComp('${id}','${b}', n(this.value))"></div>`).join("");
+    return `<div class="card"><div class="card-title"><b>${esc(u.name)} <span class="pill">${id}</span></b><button class="btn danger" onclick="delete db.units['${id}']; render()">Delete</button></div>
+        <div class="grid three">
+            ${unitInput(id,"name",u.name,"Name / 名称")}${unitInput(id,"faction",u.faction,"Faction / 阵营")}${unitInput(id,"icon",u.icon || "","Icon text / 图标文字")}
+            ${unitInput(id,"personnel",u.personnel,"Personnel / 人数","number","1")}${unitInput(id,"equipment_level",u.equipment_level,"Equipment Level / 装备水平","number","0.1")}${unitInput(id,"morale",u.morale,"Morale / 士气","number","1")}
+            ${unitInput(id,"lon",u.lon,"Longitude / 经度","number","0.001")}${unitInput(id,"lat",u.lat,"Latitude / 纬度","number","0.001")}${unitInput(id,"entrenchment",u.entrenchment || 0,"Entrenchment / 工事","number","0.1")}
+            <div><label>Unit Type / 单位类型</label><select onchange="db.units['${id}'].unit_type=this.value">${typeOptions}</select></div>
+            <div><label>Primary Weapon / 主武器</label><select onchange="db.units['${id}'].primary_weapon=this.value">${weaponOptions}</select></div>
+            <div><label>Default Stance / 默认姿态</label><select onchange="db.units['${id}'].stance=this.value">${stanceOptions}</select></div>
+        </div>
+        <h3 class="small">Composition / 编成</h3><div class="grid three">${comp}</div>
+    </div>`;
+}
+function unitInput(id, key, value, label, type="text", step="") { return `<div><label>${label}</label><input type="${type}" ${step ? `step="${step}"` : ""} value="${esc(value)}" onchange="db.units['${id}'].${key}=this.type==='number'?n(this.value):this.value"></div>`; }
+function setComp(id, b, value) { if (!db.units[id].composition) db.units[id].composition = {}; if (value > 0) db.units[id].composition[b] = value; else delete db.units[id].composition[b]; }
+function addUnit() {
+    const id = "unit_" + Date.now().toString().slice(-8);
+    const battalionId = Object.keys(db.battalions)[0];
+    const weaponId = Object.keys(db.weapons)[0];
+    if (!battalionId || !weaponId) { alert("Create at least one battalion and weapon first."); return; }
+    const center = db.scenario.map_center || [0, 0];
+    const faction = db.scenario.committee?.delegate_roles?.[0]?.faction || "FACTION";
+    const size = n(db.battalions[battalionId].size, 0);
+    if (!Number.isInteger(size) || size <= 0) { alert("Set a positive whole-number battalion size before creating a unit."); return; }
+    const defaults = db.rules.unit_defaults;
+    db.units[id] = {name:"New Unit", faction, icon:"", personnel:size, lon:center[1], lat:center[0], equipment_level:defaults.equipment_level, unit_type:defaults.unit_type, composition:{[battalionId]:1}, primary_weapon:weaponId, morale:defaults.morale, stance:defaults.stance, entrenchment:defaults.entrenchment};
+    render();
+}
+
+function renderBattalions() {
+    return `<div class="section"><h2>Battalion Types / 营种数据</h2><p class="hint">These define the building blocks chairs choose when creating units. Size is required and must be a positive whole-number personnel complement.</p><div class="toolbar"><button class="btn secondary" onclick="addBattalion()">Add Battalion Type</button></div>
+        ${Object.entries(db.battalions).map(([id, b]) => `<div class="card"><div class="card-title"><b>${esc(b.name)} <span class="pill">${id}</span></b><button class="btn danger" onclick="delete db.battalions['${id}']; render()">Delete</button></div><div class="grid three">
+            ${batInput(id,"name",b.name,"Name / 名称")}${batInput(id,"size",b.size ?? 1000,"Personnel per Battalion / 每营人数","number","1","1")}${batInput(id,"speed",b.speed,"Speed km/h / 速度","number","0.1")}
+            ${batInput(id,"soft",b.soft,"Soft Attack / 对软目标","number","1")}${batInput(id,"hard",b.hard,"Hard Attack / 对装甲","number","1")}${batInput(id,"ap",b.ap || 0,"Armor Piercing / 穿甲","number","1")}
+            ${batInput(id,"armor",b.armor,"Armor / 装甲","number","1")}${batInput(id,"defense",b.defense,"Defense / 防御","number","1")}${batInput(id,"breakthrough",b.breakthrough || 0,"Breakthrough / 突破","number","1")}
+            ${batInput(id,"org",b.org,"Organization / 组织度","number","1")}${batInput(id,"softness",b.softness ?? 1,"Softness 0-1 / 软目标比例","number","0.1")}${batInput(id,"terrain",b.terrain,"Terrain Efficiency / 地形适应","number","0.1")}
+            ${batInput(id,"recon_power",b.recon_power,"Recon Power / 侦察值","number","0.1")}${batInput(id,"movement_supply_cost",b.movement_supply_cost,"Movement Supply Cost / 机动补给消耗","number","0.01")}
+            <div><label>Capabilities / 能力（comma separated）</label><input value="${esc((b.capabilities || []).join(', '))}" onchange="db.battalions['${id}'].capabilities=this.value.split(',').map(x=>x.trim()).filter(Boolean)"></div>
+        </div></div>`).join("")}</div>`;
+}
+function batInput(id, key, value, label, type="text", step="", min="") { return `<div><label>${label}</label><input type="${type}" ${step ? `step="${step}"` : ""} ${min ? `min="${min}"` : ""} value="${esc(value)}" onchange="db.battalions['${id}'].${key}=this.type==='number'?n(this.value):this.value"></div>`; }
+function addBattalion() {
+    const id = prompt("Battalion ID (letters, numbers, underscore, dash, or dot)");
+    if (!id) return;
+    if (!validId(id) || db.battalions[id]) { alert("Invalid or duplicate battalion ID."); return; }
+    db.battalions[id] = {name:"New Battalion", size:1000, speed:0, soft:0, hard:0, ap:0, armor:0, defense:0, breakthrough:0, org:0, softness:1, terrain:1, recon_power:0, movement_supply_cost:0, capabilities:[]};
+    render();
+}
+
+function renderWeapons() {
+    return `<div class="section"><h2>Weapons / 武器射程</h2><div class="toolbar"><button class="btn secondary" onclick="addWeapon()">Add Weapon</button></div>
+        ${Object.entries(db.weapons).map(([id, w]) => `<div class="card"><div class="grid"><div><label>ID</label><input value="${esc(id)}" readonly></div><div><label>Name / 名称</label><input value="${esc(w.name)}" onchange="db.weapons['${id}'].name=this.value"></div><div><label>Range km / 射程</label><input type="number" step="0.1" value="${w.range}" onchange="db.weapons['${id}'].range=n(this.value)"></div><div><label><input type="checkbox" style="width:auto;" ${w.indirect_fire ? "checked" : ""} onchange="db.weapons['${id}'].indirect_fire=this.checked"> Indirect fire / 间接射击</label></div><button class="btn danger" onclick="delete db.weapons['${id}']; render()">Delete</button></div></div>`).join("")}</div>`;
+}
+function addWeapon() {
+    const id = prompt("Weapon ID (letters, numbers, underscore, dash, or dot)");
+    if (!id) return;
+    if (!validId(id) || db.weapons[id]) { alert("Invalid or duplicate weapon ID."); return; }
+    db.weapons[id] = {name:"New Weapon", range:0, indirect_fire:false};
+    render();
+}
+
+function renderExport() {
+    const checks = validateDlc(false);
+    return `<div class="section"><h2>Export / 导出</h2><p class="hint">Click Check Package first. Then export the zip. Unzip it into the project <code>dlc</code> folder and rename the folder to your committee ID.</p>
+    <div class="toolbar"><button class="btn secondary" onclick="validateDlc()">Check Package</button><button class="btn" onclick="exportAll()">Export DLC Zip</button></div>
+    <div class="card"><b>Package status</b><div>${checks.map(c => `<div style="color:${c.ok ? '#7ee787' : '#ff7b72'}">${c.ok ? 'OK' : 'FIX'} - ${c.msg}</div>`).join("")}</div></div></div>`;
+}
+
+function validateDlc(showAlert=true) {
+    const checks = [];
+    checks.push({ok: !!db.scenario.scenario_name, msg:"Scenario has a name"});
+    checks.push({ok: Object.keys(db.units).length > 0, msg:"At least one unit exists"});
+    checks.push({ok: Object.keys(db.battalions).length > 0, msg:"At least one battalion type exists"});
+    checks.push({ok: Object.keys(db.weapons).length > 0, msg:"At least one weapon exists"});
+    checks.push({ok: db.rules?.schema_version === 1, msg:"rules.json uses schema version 1"});
+    checks.push({ok: !!db.rules?.unit_types?.[db.rules?.unit_defaults?.unit_type], msg:"Default unit type exists in rules"});
+    checks.push({ok: !!db.doctrine?.stances?.[db.rules?.unit_defaults?.stance], msg:"Default stance exists in core doctrine"});
+    const bounds = db.scenario.map_config?.bounds || {};
+    checks.push({ok: [bounds.min_lon,bounds.max_lon,bounds.min_lat,bounds.max_lat].every(Number.isFinite) && bounds.min_lon < bounds.max_lon && bounds.min_lat < bounds.max_lat, msg:"Map bounds are valid"});
+    checks.push({ok: Array.isArray(db.scenario.map_center) && db.scenario.map_center.length === 2 && db.scenario.map_center.every(Number.isFinite), msg:"Map center is valid"});
+    for (const id of [...Object.keys(db.units), ...Object.keys(db.battalions), ...Object.keys(db.weapons)]) {
+        checks.push({ok: validId(id), msg:`${id} is a safe package ID`});
     }
-
-    function updateStaticUI() {
-        document.getElementById('ui-title').innerText = t('title');
-        document.getElementById('ui-subtitle').innerText = t('sub');
-        document.getElementById('ui-export').innerText = t('export');
-        document.getElementById('nav-cat-1').innerText = t('cat1');
-        document.getElementById('nav-cat-2').innerText = t('cat2');
-        document.getElementById('nav-scenario').innerText = t('nav_scen');
-        document.getElementById('nav-units').innerText = t('nav_unit');
-        document.getElementById('nav-battalions').innerText = t('nav_bat');
-        document.getElementById('nav-weapons').innerText = t('nav_wea');
+    for (const [id, u] of Object.entries(db.units)) {
+        checks.push({ok: !!db.weapons[u.primary_weapon], msg:`${id} uses an existing weapon`});
+        checks.push({ok: Object.keys(u.composition || {}).every(k => !!db.battalions[k]), msg:`${id} composition uses existing battalion IDs`});
+        checks.push({ok: Number.isFinite(u.lon) && Number.isFinite(u.lat) && Number.isFinite(u.personnel) && u.personnel >= 0, msg:`${id} has valid coordinates and personnel`});
+        checks.push({ok: !!db.rules?.unit_types?.[u.unit_type], msg:`${id} uses a unit type from rules.json`});
+        checks.push({ok: !!db.doctrine?.stances?.[u.stance], msg:`${id} uses a core combat stance`});
     }
-
-    // ==========================================
-    // 2. IN-MEMORY DATABASE | 内存数据库状态
-    // ==========================================
-    const db = {
-        scenario: {
-            "scenario_name": "Operation Vanguard",
-            "description": "Custom operation database.",
-            "map_config": {
-                "bounds": { "min_lon": 60.0, "max_lon": 75.0, "min_lat": 29.0, "max_lat": 39.0 },
-                "grid_resolution": [200, 200],
-                "dem_dir": "maps/dem_tiles", "roads_file": "maps/roads.tif", "provinces_file": "maps/provinces.geojson"
-            },
-            "initial_units_file": "units.json",
-            "diplomacy_blocs": [ { "bloc_name": "BLUFOR", "members": ["NATO"] } ]
-        },
-        units: {
-            "unit_001": { "name": "1st Brigade", "faction": "NATO", "icon": "⚡", "personnel": 5000, "lon": 65.0, "lat": 35.0, "unit_type": "ARMY", "equipment_level": 3.0, "primary_weapon": "AK-74", "stance": "DEFENSIVE", "composition": {"inf": 3, "arm": 1} }
-        },
-        battalions: {
-            "inf": { "name": "Infantry", "speed": 15, "soft": 45, "hard": 10, "armor": 0, "defense": 60, "org": 60, "terrain": 0.8 },
-            "arm": { "name": "Armor", "speed": 25, "soft": 35, "hard": 60, "armor": 200, "defense": 20, "org": 20, "terrain": 0.3 }
-        },
-        weapons: {
-            "AK-74": { "name": "Standard Arms", "range": 0.5 },
-            "Howitzer": { "name": "155mm Artillery", "range": 30.0 }
-        }
-    };
-
-    let currentTab = 'scenario';
-    let selectedItemId = null; 
-
-    // ==========================================
-    // 3. VIEW CONTROLLER | 视图控制器
-    // ==========================================
-    
-    /**
-     * Switches the active editor tab.
-     * 切换当前激活的编辑器选项卡。
-     * @param {string} tabId - Target tab identifier | 目标选项卡标识符
-     */
-    function switchTab(tabId) {
-        currentTab = tabId;
-        selectedItemId = null;
-        document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
-        event.currentTarget.classList.add('active');
-        renderView();
+    for (const [id, b] of Object.entries(db.battalions)) {
+        checks.push({ok: Number.isFinite(b.recon_power) && Number.isFinite(b.movement_supply_cost) && b.movement_supply_cost >= 0, msg:`${id} has recon and movement supply data`});
     }
-
-    /**
-     * Triggers the rendering pipeline based on the current active tab.
-     * 根据当前激活的选项卡触发渲染管线。
-     */
-    function renderView() {
-        const container = document.getElementById('main-editor');
-        container.innerHTML = ''; 
-        
-        if (currentTab === 'scenario') {
-            container.innerHTML = renderScenarioForm();
-        } else {
-            container.innerHTML = renderMasterDetail(currentTab);
-            if (currentTab === 'units') renderUnitDetail();
-            else if (currentTab === 'battalions') renderBattalionDetail();
-            else if (currentTab === 'weapons') renderWeaponDetail();
-        }
+    for (const [id, w] of Object.entries(db.weapons)) {
+        checks.push({ok: typeof w.indirect_fire === "boolean", msg:`${id} declares direct or indirect fire`});
     }
+    if (showAlert) alert(checks.map(c => `${c.ok ? 'OK' : 'FIX'} - ${c.msg}`).join("\n"));
+    return checks;
+}
 
-    // ==========================================
-    // 4. RENDERING ENGINE | 渲染引擎
-    // ==========================================
-    
-    function renderScenarioForm() {
-        const s = db.scenario;
-        const b = s.map_config.bounds;
-        return `
-            <div class="detail-pane">
-                <div class="form-section">
-                    <div class="section-title">${t('scen_info')}</div>
-                    <div class="form-grid">
-                        <div class="form-group full"><label>${t('scen_name')}</label><input type="text" value="${s.scenario_name}" onchange="db.scenario.scenario_name = this.value"></div>
-                        <div class="form-group full"><label>${t('scen_desc')}</label><input type="text" value="${s.description}" onchange="db.scenario.description = this.value"></div>
-                    </div>
-                </div>
-                <div class="form-section">
-                    <div class="section-title">${t('scen_bounds')}</div>
-                    <div class="form-grid">
-                        <div class="form-group"><label>${t('lon_min')}</label><input type="number" step="0.1" value="${b.min_lon}" onchange="db.scenario.map_config.bounds.min_lon = parseFloat(this.value)"></div>
-                        <div class="form-group"><label>${t('lon_max')}</label><input type="number" step="0.1" value="${b.max_lon}" onchange="db.scenario.map_config.bounds.max_lon = parseFloat(this.value)"></div>
-                        <div class="form-group"><label>${t('lat_min')}</label><input type="number" step="0.1" value="${b.min_lat}" onchange="db.scenario.map_config.bounds.min_lat = parseFloat(this.value)"></div>
-                        <div class="form-group"><label>${t('lat_max')}</label><input type="number" step="0.1" value="${b.max_lat}" onchange="db.scenario.map_config.bounds.max_lat = parseFloat(this.value)"></div>
-                    </div>
-                </div>
-            </div>
-        `;
+async function loadTemplate(confirmReplace=true) {
+    if (confirmReplace && !confirm("Replace current editor data with the default crisis template?")) return;
+    try {
+        const response = await fetch('/api/editor_template');
+        const data = await response.json();
+        if (!response.ok || data.status !== 'ok') throw new Error(data.msg || `Request failed (${response.status})`);
+        db = {scenario:data.scenario, units:data.units, battalions:data.battalions, weapons:data.weapons, rules:data.rules, doctrine:data.doctrine};
+        mapFiles = { dem: [], roads: null, rivers: null, provinces: null };
+        render();
+    } catch (error) {
+        byId("content").innerHTML = `<div class="section"><h2 style="color:#ff7b72;">Starter package failed to load</h2><p>${esc(error.message)}</p></div>`;
     }
+}
 
-    function renderMasterDetail(collectionKey) {
-        let listHtml = '';
-        for (const [id, item] of Object.entries(db[collectionKey])) {
-            const isSelected = id === selectedItemId ? 'selected' : '';
-            const sub = item.faction || (item.range ? `R: ${item.range}km` : '') || (item.speed ? `V: ${item.speed}km/h` : '');
-            listHtml += `
-                <div class="list-item ${isSelected}" onclick="selectItem('${collectionKey}', '${id}')">
-                    <div class="item-title">${item.icon ? item.icon + ' ' : ''}${item.name || id}</div>
-                    <div class="item-sub">${id} | ${sub}</div>
-                </div>
-            `;
-        }
-        
-        return `
-            <div class="master-list">
-                <div class="list-header">
-                    <span style="font-weight:bold; color:#c9d1d9;">${t('list_title')}</span>
-                    <button class="gui-btn" style="padding: 4px 8px; font-size:12px;" onclick="createNewItem('${collectionKey}')">${t('btn_add')}</button>
-                </div>
-                <div class="list-items">${listHtml}</div>
-            </div>
-            <div class="detail-pane" id="detail-container"></div>
-        `;
-    }
+async function exportAll() {
+    const failed = validateDlc(false).filter(c => !c.ok);
+    if (failed.length && !confirm("Some checks failed. Export anyway?")) return;
+    if (typeof JSZip === 'undefined') { alert("ZIP library unavailable. Connect to the internet and reload the editor."); return; }
+    const zip = new JSZip();
+    const scenario = JSON.parse(JSON.stringify(db.scenario));
+    if (mapFiles.roads) scenario.map_config.roads_file = "maps/" + mapFiles.roads.name;
+    if (mapFiles.rivers) scenario.map_config.rivers_file = "maps/" + mapFiles.rivers.name;
+    if (mapFiles.provinces) scenario.map_config.provinces_file = "maps/" + mapFiles.provinces.name;
+    if (mapFiles.dem.length) scenario.map_config.dem_dir = "maps/dem_tiles";
+    zip.file("scenario.json", JSON.stringify(scenario, null, 2));
+    zip.file("units.json", JSON.stringify(db.units, null, 2));
+    zip.file("battalions.json", JSON.stringify(db.battalions, null, 2));
+    zip.file("weapons.json", JSON.stringify(db.weapons, null, 2));
+    zip.file("rules.json", JSON.stringify(db.rules, null, 2));
+    for (const f of mapFiles.dem) zip.file("maps/dem_tiles/" + f.name, f);
+    if (mapFiles.roads) zip.file("maps/" + mapFiles.roads.name, mapFiles.roads);
+    if (mapFiles.rivers) zip.file("maps/" + mapFiles.rivers.name, mapFiles.rivers);
+    if (mapFiles.provinces) zip.file("maps/" + mapFiles.provinces.name, mapFiles.provinces);
+    const blob = await zip.generateAsync({type:"blob"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${scenario.scenario_name.replace(/[^a-z0-9]+/gi, "_").toLowerCase()}_dlc.zip`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+}
 
-    /**
-     * Handles item selection in the master list.
-     * 处理主列表中的条目选择事件。
-     */
-    function selectItem(collectionKey, id) {
-        selectedItemId = id;
-        renderView();
-    }
-
-    /**
-     * Instantiates a new default record based on the active collection.
-     * 基于当前激活的集合实例化一条默认的新记录。
-     */
-    function createNewItem(collectionKey) {
-        const newId = `id_${Date.now().toString().slice(-4)}`;
-        if (collectionKey === 'units') db.units[newId] = { name: "New Unit", faction: "UNKNOWN", icon: "🪖", personnel: 1000, lon: 0, lat: 0, unit_type: "ARMY", equipment_level: 1, composition: {"inf":1}, primary_weapon: "AK-74", stance: "AGGRESSIVE" };
-        if (collectionKey === 'weapons') db.weapons[newId] = { name: "New Weapon", range: 1.0 };
-        if (collectionKey === 'battalions') db.battalions[newId] = { name: "New Battalion", speed: 10, soft: 10, hard: 10, armor: 0, defense: 10, org: 50, terrain: 1.0 };
-        
-        selectedItemId = newId;
-        renderView();
-    }
-
-    function renderUnitDetail() {
-        const container = document.getElementById('detail-container');
-        if (!selectedItemId) { container.innerHTML = `<div class="empty-state">${t('empty_state')}</div>`; return; }
-        
-        const u = db.units[selectedItemId];
-        const updateObj = `db.units['${selectedItemId}']`;
-
-        let weaponOptions = '';
-        for (const wId of Object.keys(db.weapons)) { weaponOptions += `<option value="${wId}" ${u.primary_weapon === wId ? 'selected' : ''}>${wId}</option>`; }
-
-        container.innerHTML = `
-            <div class="form-section">
-                <div style="display:flex; justify-content:space-between;"><div class="section-title">${t('unit_id')}</div><button class="gui-btn danger" onclick="deleteItem('units', '${selectedItemId}')">${t('del')}</button></div>
-                <div class="form-grid">
-                    <div class="form-group"><label>${t('uid')}</label><input type="text" value="${selectedItemId}" readonly style="opacity:0.5;"></div>
-                    <div class="form-group"><label>${t('uname')}</label><input type="text" value="${u.name}" onchange="${updateObj}.name = this.value; renderView();"></div>
-                    <div class="form-group"><label>${t('ufac')}</label><input type="text" value="${u.faction}" onchange="${updateObj}.faction = this.value; renderView();"></div>
-                    <div class="form-group"><label>${t('uicon')}</label><input type="text" value="${u.icon || ''}" placeholder="e.g., 🚁, 💀, ⚓" onchange="${updateObj}.icon = this.value; renderView();"></div>
-                    <div class="form-group"><label>${t('utype')}</label>
-                        <select onchange="${updateObj}.unit_type = this.value">
-                            <option value="ARMY" ${u.unit_type==='ARMY'?'selected':''}>ARMY</option><option value="AIR_FORCE" ${u.unit_type==='AIR_FORCE'?'selected':''}>AIR_FORCE</option><option value="ARTILLERY" ${u.unit_type==='ARTILLERY'?'selected':''}>ARTILLERY</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-            <div class="form-section">
-                <div class="section-title">${t('upos')}</div>
-                <div class="form-grid">
-                    <div class="form-group"><label>${t('ulon')}</label><input type="number" step="0.001" value="${u.lon}" onchange="${updateObj}.lon = parseFloat(this.value)"></div>
-                    <div class="form-group"><label>${t('ulat')}</label><input type="number" step="0.001" value="${u.lat}" onchange="${updateObj}.lat = parseFloat(this.value)"></div>
-                    <div class="form-group"><label>${t('ustance')}</label>
-                        <select onchange="${updateObj}.stance = this.value">
-                            <option value="AGGRESSIVE" ${u.stance==='AGGRESSIVE'?'selected':''}>AGGRESSIVE</option><option value="DEFENSIVE" ${u.stance==='DEFENSIVE'?'selected':''}>DEFENSIVE</option><option value="STEALTH" ${u.stance==='STEALTH'?'selected':''}>STEALTH</option>
-                        </select>
-                    </div>
-                    <div class="form-group"><label>${t('uwea')}</label><select onchange="${updateObj}.primary_weapon = this.value">${weaponOptions}</select></div>
-                </div>
-            </div>
-            <div class="form-section">
-                <div class="section-title">${t('ucomp')}</div>
-                <p style="font-size:12px; color:#8b949e; margin-top:-5px;">${t('ucomp_sub')}</p>
-                <div class="form-grid" id="comp-editor-grid"></div>
-            </div>
-        `;
-
-        const compGrid = document.getElementById('comp-editor-grid');
-        for (const bId of Object.keys(db.battalions)) {
-            const currentCount = u.composition[bId] || 0;
-            compGrid.innerHTML += `
-                <div class="form-group"><label>${db.battalions[bId].name} (${bId})</label><input type="number" min="0" value="${currentCount}" onchange="updateComposition('${selectedItemId}', '${bId}', parseInt(this.value))"></div>
-            `;
-        }
-    }
-
-    function updateComposition(unitId, batId, count) {
-        if (!db.units[unitId].composition) db.units[unitId].composition = {};
-        if (count > 0) db.units[unitId].composition[batId] = count;
-        else delete db.units[unitId].composition[batId];
-    }
-
-    function renderWeaponDetail() {
-        const container = document.getElementById('detail-container');
-        if (!selectedItemId) { container.innerHTML = `<div class="empty-state">${t('empty_state')}</div>`; return; }
-        const w = db.weapons[selectedItemId];
-        container.innerHTML = `
-            <div class="form-section">
-                <div style="display:flex; justify-content:space-between;"><div class="section-title">${t('wea_param')}</div><button class="gui-btn danger" onclick="deleteItem('weapons', '${selectedItemId}')">${t('del')}</button></div>
-                <div class="form-grid">
-                    <div class="form-group full"><label>${t('wea_name')}</label><input type="text" value="${w.name}" onchange="db.weapons['${selectedItemId}'].name = this.value; renderView();"></div>
-                    <div class="form-group"><label>${t('wea_range')}</label><input type="number" step="0.1" value="${w.range}" onchange="db.weapons['${selectedItemId}'].range = parseFloat(this.value)"></div>
-                </div>
-            </div>
-        `;
-    }
-
-    function renderBattalionDetail() {
-        const container = document.getElementById('detail-container');
-        if (!selectedItemId) { container.innerHTML = `<div class="empty-state">${t('empty_state')}</div>`; return; }
-        const b = db.battalions[selectedItemId];
-        const updateObj = `db.battalions['${selectedItemId}']`;
-        container.innerHTML = `
-            <div class="form-section">
-                <div style="display:flex; justify-content:space-between;"><div class="section-title">${t('bat_stat')}</div><button class="gui-btn danger" onclick="deleteItem('battalions', '${selectedItemId}')">${t('del')}</button></div>
-                <div class="form-grid">
-                    <div class="form-group full"><label>${t('bat_name')}</label><input type="text" value="${b.name}" onchange="${updateObj}.name = this.value; renderView();"></div>
-                    <div class="form-group"><label>${t('bat_spd')}</label><input type="number" value="${b.speed}" onchange="${updateObj}.speed = parseFloat(this.value)"></div>
-                    <div class="form-group"><label>${t('bat_ter')}</label><input type="number" step="0.1" value="${b.terrain || 1.0}" onchange="${updateObj}.terrain = parseFloat(this.value)"></div>
-                    <div class="form-group"><label>${t('bat_soft')}</label><input type="number" value="${b.soft}" onchange="${updateObj}.soft = parseFloat(this.value)"></div>
-                    <div class="form-group"><label>${t('bat_hard')}</label><input type="number" value="${b.hard}" onchange="${updateObj}.hard = parseFloat(this.value)"></div>
-                    <div class="form-group"><label>${t('bat_arm')}</label><input type="number" value="${b.armor}" onchange="${updateObj}.armor = parseFloat(this.value)"></div>
-                    <div class="form-group"><label>${t('bat_def')}</label><input type="number" value="${b.defense}" onchange="${updateObj}.defense = parseFloat(this.value)"></div>
-                    <div class="form-group"><label>${t('bat_org')}</label><input type="number" value="${b.org}" onchange="${updateObj}.org = parseFloat(this.value)"></div>
-                </div>
-            </div>
-        `;
-    }
-
-    /**
-     * Deletes the currently selected item from the database.
-     * 从数据库中永久删除当前选中的条目。
-     */
-    function deleteItem(collection, id) {
-        if (confirm("Confirm deletion? / 确认删除？")) {
-            delete db[collection][id];
-            selectedItemId = null;
-            renderView();
-        }
-    }
-
-    // ==========================================
-    // 5. EXPORT ENGINE | 导出打包引擎
-    // ==========================================
-    
-    /**
-     * Serializes the in-memory database and downloads a consolidated zip package.
-     * 序列化内存数据库并下载整合成的 zip 压缩包。
-     */
-    function exportAll() {
-        const zip = new JSZip();
-        zip.file("scenario.json", JSON.stringify(db.scenario, null, 2));
-        zip.file("units.json", JSON.stringify(db.units, null, 2));
-        zip.file("battalions.json", JSON.stringify(db.battalions, null, 2));
-        zip.file("weapons.json", JSON.stringify(db.weapons, null, 2));
-        
-        zip.generateAsync({type:"blob"}).then(function(content) {
-            const a = document.createElement("a");
-            a.href = URL.createObjectURL(content);
-            a.download = `cdc_dlc_config_${Date.now()}.zip`;
-            a.click();
-        });
-    }
-
-    // Boot Initialization | 启动初始化
-    window.onload = () => {
-        updateStaticUI();
-        renderView();
-    };
+render();
+loadTemplate(false);
 </script>
 </body>
 </html>

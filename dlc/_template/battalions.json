@@ -1,0 +1,19 @@
+{
+  "general": {
+    "name": "General Battalion",
+    "size": 1000,
+    "recon_power": 0.0,
+    "movement_supply_cost": 0.0,
+    "speed": 10.0,
+    "soft": 20.0,
+    "hard": 5.0,
+    "ap": 50.0,
+    "armor": 0.0,
+    "defense": 25.0,
+    "breakthrough": 10.0,
+    "org": 60.0,
+    "softness": 1.0,
+    "terrain": 1.0,
+    "capabilities": []
+  }
+}

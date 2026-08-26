@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CDC Chair Guide</title>
+    <link rel="stylesheet" href="/static/css/style.css" />
+    <style>
+        body { overflow: auto; user-select: text; font-family: "Segoe UI", Arial, sans-serif; background:#050a0f; color:#c9d1d9; }
+        main { max-width: 980px; margin: 0 auto; padding: 28px 24px 60px; }
+        h1, h2 { color:#58a6ff; }
+        h1 { margin-bottom: 4px; }
+        h2 { border-bottom: 1px solid #30363d; padding-bottom: 6px; margin-top: 28px; }
+        p, li { line-height: 1.55; }
+        code { background:#0d1117; border:1px solid #30363d; padding:2px 5px; border-radius:3px; }
+        .box { border:1px solid #30363d; background:#0d1117; padding:14px; border-radius:4px; margin:14px 0; }
+        .warn { border-color:#d97706; }
+        .ok { border-color:#2ea043; }
+        .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:12px; }
+    </style>
+</head>
+<body>
+<main>
+    <h1>CDC Chair Guide</h1>
+    <p>This page is for chairs and crisis staff with no coding background. Keep it open during committee.</p>
+
+    <div class="box ok">
+        <b>Normal launch:</b> double-click <code>START_CDC_SIM.bat</code>, wait until it says the server is running, then open <code>http://127.0.0.1:5000</code>.
+    </div>
+
+    <h2>1. Start Of Committee</h2>
+    <ol>
+        <li>Open the dashboard in the browser.</li>
+        <li>On the first screen, click the scenario card you want to run.</li>
+        <li>Wait until the map appears. Do not press Play yet.</li>
+        <li>Click <code>MUN</code>. Read the committee name, rules, roles, and faction readiness.</li>
+        <li>Click <code>System</code>, choose <code>slot_1</code>, then click <code>SAVE</code>. This is your clean starting point.</li>
+    </ol>
+
+    <h2>2. During Debate</h2>
+    <div class="grid">
+        <div class="box">
+            <b>Delegates debate only</b>
+            <p>Keep the simulation paused. Use the map as a reference board.</p>
+        </div>
+        <div class="box">
+            <b>Delegates submit directives</b>
+            <p>Crisis staff reads the directive, decides the effect, then enters it in the <code>MUN</code> panel.</p>
+        </div>
+        <div class="box">
+            <b>Military movement happens</b>
+            <p>Select a unit, choose Relocate, Planned Route, or Assault, click the map destination, review the plain-language behavior, then click Authorize.</p>
+        </div>
+    </div>
+
+    <h2>3. Operational Orders</h2>
+    <ul>
+        <li><code>Hold</code>: stop and keep the current combat stance.</li>
+        <li><code>Relocate</code>: move directly without starting ranged combat; the unit still defends itself at close contact.</li>
+        <li><code>Planned Route</code>: click several waypoints, then authorize once. The unit holds ranged fire while moving.</li>
+        <li><code>Assault</code>: advance more slowly, stop at detected enemy contact, fight, and resume if contact clears.</li>
+        <li><code>Defend Here</code>: stop, recover, and dig in while retaining the selected stance.</li>
+        <li><code>Fortify</code>: build fieldworks faster by spending supply and gaining fatigue, then automatically defend.</li>
+    </ul>
+    <p>The combined <b>Operational Order</b> panel contains two independent choices. <b>Task</b> says what the unit should do and where. <b>Combat Stance</b> controls fire discipline, speed, concealment, recon, and combat modifiers. Changing either keeps the other. Relocate and Planned Route always withhold ranged fire; close-contact self-defense remains active. Defend and Fortify build fieldworks in any stance.</p>
+
+    <h2>4. How To Adjudicate A Directive</h2>
+    <ol>
+        <li>Click <code>MUN</code>.</li>
+        <li>In <code>Public update / directive title</code>, write a short title such as <code>Supply convoy reaches Kabul</code>.</li>
+        <li>In the large text box, write one or two sentences that chairs are comfortable reading aloud.</li>
+        <li>In <code>Faction or GLOBAL</code>, type the exact faction name. Use <code>GLOBAL</code> if all factions are affected.</li>
+        <li>Choose the effect:
+            <ul>
+                <li><code>No mechanical effect</code>: story/news only.</li>
+                <li><code>Morale +/-</code>: speeches, propaganda, battlefield shock, political legitimacy.</li>
+                <li><code>Supply +/-</code>: logistics, sanctions, aid, fuel, ammunition, food.</li>
+                <li><code>Fatigue +/-</code>: overextension, rest, weather, disease, poor planning.</li>
+                <li><code>Combat multiplier</code>: temporary training, advisors, weapons, poor coordination.</li>
+                <li><code>Speed multiplier</code>: bridges, roads, airlift, sabotage, difficult terrain.</li>
+            </ul>
+        </li>
+        <li>Enter <code>Value</code>. Examples: <code>+5</code> morale, <code>-10</code> supply, <code>1.2</code> combat multiplier, <code>0.8</code> speed multiplier.</li>
+        <li>For multiplier effects, set <code>Duration hours</code>. For morale/supply/fatigue, duration is recorded but the change is immediate.</li>
+        <li>Leave <code>Publish to delegate-facing crisis feed</code> checked for public updates. Uncheck it for private staff notes.</li>
+        <li>Click <code>Apply Adjudication</code>.</li>
+    </ol>
+
+    <h2>5. Good Ruling Sizes</h2>
+    <div class="box">
+        <p>Use small effects often. Use large effects rarely.</p>
+        <ul>
+            <li>Minor successful directive: +/- 3 to 5 morale or supply.</li>
+            <li>Strong, detailed directive: +/- 8 to 12 morale or supply.</li>
+            <li>Major strategic success or disaster: +/- 15 to 25 morale or supply.</li>
+            <li>Temporary modifier: <code>1.1</code> or <code>1.2</code> for a bonus, <code>0.8</code> or <code>0.9</code> for a penalty.</li>
+        </ul>
+    </div>
+
+    <h2>6. Save, Reset, And Export</h2>
+    <ol>
+        <li>Save before every major crisis update: click <code>System</code>, choose a slot, click <code>SAVE</code>.</li>
+        <li>If something goes wrong, click <code>System</code>, choose the last good slot, click <code>LOAD</code>.</li>
+        <li>To return to the original scenario, choose <code>Initial State (Hard Reset)</code> and click <code>LOAD</code>.</li>
+        <li>To export a summary, click <code>MUN</code>, then <code>Export SITREP</code>. A Markdown file downloads.</li>
+    </ol>
+
+    <h2>7. Build Your Own DLC</h2>
+    <ol>
+        <li>Click <code>Editor</code> on the main dashboard.</li>
+        <li>Fill the tabs from left to right: Scenario & Map, Simulation Rules, Committee, Diplomacy, Units, Battalion Types, Weapons, Export.</li>
+        <li>Use <code>Battalion Types</code> to create infantry, armor, artillery, militia, engineers, special forces, or custom unit building blocks.</li>
+        <li>Use <code>Simulation Rules</code> for battle-specific unit types, capabilities, and tuning. Tactical orders and combat stances are shared core doctrine and appear read-only.</li>
+        <li>Click <code>Check Package</code>.</li>
+        <li>Click <code>Export DLC Zip</code>.</li>
+        <li>Unzip the package into the project <code>dlc</code> folder and refresh the dashboard.</li>
+    </ol>
+
+    <h2>8. Common Problems</h2>
+    <ul>
+        <li><b>No scenario appears:</b> check that the scenario folder is inside <code>dlc</code> and contains <code>scenario.json</code>.</li>
+        <li><b>The browser cannot connect:</b> make sure <code>START_CDC_SIM.bat</code> is still open.</li>
+            <li><b>You want to check the installation:</b> open <code>http://127.0.0.1:5000/status</code>. It lists missing dependencies or invalid DLC packages.</li>
+        <li><b>Map loads slowly:</b> wait. DEM terrain files are large.</li>
+        <li><b>An airdropped unit does not appear:</b> choose at least one battalion and confirm deployed personnel is greater than zero. Every battalion must have a positive <code>size</code> in its DLC data.</li>
+            <li><b>A unit will not bombard:</b> it must receive the bombard capability named by the active DLC rules, have enough supply, and target a point in range.</li>
+        <li><b>You made a bad ruling:</b> load the previous save slot and re-enter the ruling.</li>
+    </ul>
+
+    <div class="box warn">
+        <b>Chair principle:</b> CDC Sim is an adjudication aid, not the committee itself. Chairs should use it to keep rulings consistent, but political judgment and crisis pacing still come from staff.
+    </div>
+</main>
+</body>
+</html>

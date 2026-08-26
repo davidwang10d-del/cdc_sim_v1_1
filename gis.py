@@ -3,17 +3,25 @@ import glob
 import math
 import heapq
 import json
+import sys
 import numpy as np
 from PIL import Image
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 try:
     import rasterio
     from rasterio.merge import merge
+    from rasterio.enums import Resampling
     HAS_RASTERIO = True
 except ImportError as e:
     print(f"⚠️ Engine module import blocked: {e}")
     HAS_RASTERIO = False
     merge = None
+    Resampling = None
 
 def haversine_distance(lon1, lat1, lon2, lat2):
     """
@@ -29,16 +37,32 @@ def haversine_distance(lon1, lat1, lon2, lat2):
     return R * c
 
 class MapEngine:
-    def __init__(self, map_config):
+    def __init__(self, map_config, geography_rules):
         """
         [Function] Initializes the GIS engine, supporting folder-level 90m tile scanning or direct mounting of a single TIF.
         """
         print("\n" + "="*50)
         print(f"🌍 [GIS] Military-grade GIS engine starting, reading theater configuration...")
-        self.grid_w, self.grid_h = map_config.get("grid_resolution", [200, 200])
-        bounds = map_config.get("bounds", {})
-        self.min_lon, self.max_lon = bounds.get("min_lon", 60.0), bounds.get("max_lon", 75.0)
-        self.min_lat, self.max_lat = bounds.get("min_lat", 29.0), bounds.get("max_lat", 39.0)
+        self.grid_w, self.grid_h = map_config["grid_resolution"]
+        bounds = map_config["bounds"]
+        self.min_lon, self.max_lon = float(bounds["min_lon"]), float(bounds["max_lon"])
+        self.min_lat, self.max_lat = float(bounds["min_lat"]), float(bounds["max_lat"])
+        if self.grid_w < 2 or self.grid_h < 2 or self.min_lon >= self.max_lon or self.min_lat >= self.max_lat:
+            raise ValueError("Map bounds and grid resolution are invalid")
+        if not isinstance(geography_rules, dict):
+            raise ValueError("A validated DLC geography rule set is required")
+        self.geography_rules = geography_rules
+        self.fallback_elevation = float(map_config["fallback_elevation_m"])
+        self.terrain_elevation_scale = float(map_config["terrain_elevation_scale_m"])
+        self.terrain_cost_multiplier = float(map_config["terrain_cost_multiplier"])
+        self.terrain_cost_exponent = float(map_config["terrain_cost_exponent"])
+        pathing = map_config["pathing"]
+        self.road_cost = float(pathing["road_cost"])
+        self.river_penalty_default = float(pathing["river_penalty_default"])
+        self.river_penalty_heavy = float(pathing["river_penalty_heavy"])
+        self.river_penalty_engineer = float(pathing["river_penalty_engineer"])
+        analysis_resolution = map_config["dem_analysis_resolution"]
+        self.analysis_w, self.analysis_h = int(analysis_resolution[0]), int(analysis_resolution[1])
         
         self.use_real_dem = False
         self.dem_full = None
@@ -46,7 +70,7 @@ class MapEngine:
         self.width = 0
         self.height = 0
 
-        dem_dir = map_config.get("dem_dir", map_config.get("dem_file", ""))
+        dem_dir = map_config.get("dem_dir") or map_config.get("dem_file", "")
 
         # --- 1. Dual-mode DEM Data Mounting Core (Ultra-fast Direct Read) ---
         if HAS_RASTERIO and dem_dir and os.path.exists(dem_dir):
@@ -54,29 +78,53 @@ class MapEngine:
                 # Scenario A: Input is a directory containing 90m tiles
                 if os.path.isdir(dem_dir):
                     search_path = os.path.join(dem_dir, "*.tif")
-                    tif_files = glob.glob(search_path) + glob.glob(os.path.join(dem_dir, "*.tiff"))
+                    tif_files = sorted(glob.glob(search_path) + glob.glob(os.path.join(dem_dir, "*.tiff")))
                     
                     if not tif_files:
                         print(f"⚠️ [GIS] No .tif files found in {dem_dir}, falling back to virtual plains.")
                         self._fallback_to_plains()
                     else:
-                        print(f"📂 [GIS] Detected {len(tif_files)} elevation tiles, executing lossless mosaic...")
+                        print(f"📂 [GIS] Detected {len(tif_files)} elevation tiles; building a bounded analysis mosaic...")
                         src_files_to_mosaic = [rasterio.open(f) for f in tif_files]
-                        
-                        self.dem_full, self.transform = merge(src_files_to_mosaic)
-                        self.dem_full = self.dem_full[0].astype(np.float32)
-                        self.height, self.width = self.dem_full.shape
-                        
-                        for src in src_files_to_mosaic: 
-                            src.close()
+                        try:
+                            if any(src.crs is None or not src.crs.is_geographic for src in src_files_to_mosaic):
+                                raise ValueError("DEM rasters must use a geographic longitude/latitude CRS")
+                            output_res = (
+                                (self.max_lon - self.min_lon) / self.analysis_w,
+                                (self.max_lat - self.min_lat) / self.analysis_h,
+                            )
+                            merged, self.transform = merge(
+                                src_files_to_mosaic,
+                                bounds=(self.min_lon, self.min_lat, self.max_lon, self.max_lat),
+                                res=output_res,
+                                nodata=np.nan,
+                                dtype="float32",
+                                resampling=Resampling.bilinear,
+                            )
+                            self.dem_full = merged[0]
+                            self.height, self.width = self.dem_full.shape
+                        finally:
+                            for src in src_files_to_mosaic:
+                                src.close()
                         self._process_dem_matrix()
                         
                 # Scenario B: Input is a single, aggregated 90m TIF file
                 elif os.path.isfile(dem_dir) and dem_dir.endswith(('.tif', '.tiff')):
-                    print(f"📄 [GIS] Detected single theater DEM, executing ultra-fast mount...")
+                    print(f"📄 [GIS] Detected single theater DEM, building its analysis raster...")
                     with rasterio.open(dem_dir) as src:
-                        self.dem_full = src.read(1).astype(np.float32)
-                        self.transform = src.transform
+                        if src.crs is None or not src.crs.is_geographic:
+                            raise ValueError("DEM raster must use a geographic longitude/latitude CRS")
+                        sampled = src.read(
+                            1,
+                            out_shape=(self.analysis_h, self.analysis_w),
+                            resampling=Resampling.bilinear,
+                            masked=True,
+                        )
+                        self.dem_full = sampled.astype(np.float32).filled(np.nan)
+                        self.transform = src.transform * src.transform.scale(
+                            src.width / self.analysis_w,
+                            src.height / self.analysis_h,
+                        )
                         self.height, self.width = self.dem_full.shape
                         
                     self._process_dem_matrix()
@@ -100,15 +148,23 @@ class MapEngine:
 
     def _process_dem_matrix(self):
         """Elevation matrix preprocessing & pathfinding grid generation"""
-        self.dem_full[self.dem_full < -100] = 0
+        valid = np.isfinite(self.dem_full)
+        if not np.any(valid):
+            self._fallback_to_plains()
+            return
         self.use_real_dem = True 
-        
-        img = Image.fromarray(self.dem_full, mode='F')
+
+        filled_dem = np.where(valid, self.dem_full, self.fallback_elevation).astype(np.float32)
+        img = Image.fromarray(filled_dem, mode='F')
         img_small = img.resize((self.grid_w, self.grid_h), Image.Resampling.BILINEAR)
-        data_small = np.clip(np.array(img_small), 0, 5000)
-        
-        self.cost_matrix = data_small / 5000.0
-        self.path_grid = 1.0 + (self.cost_matrix ** 2) * 50.0
+        data_small = np.array(img_small, dtype=np.float32)
+
+        self.cost_matrix = np.clip(
+            (data_small - self.fallback_elevation) / self.terrain_elevation_scale,
+            0.0,
+            1.0,
+        )
+        self.path_grid = 1.0 + (self.cost_matrix ** self.terrain_cost_exponent) * self.terrain_cost_multiplier
         
         print(f"✅ [GIS] Global terrain matrix ready! Total coverage pixels: {self.width}x{self.height}")
 
@@ -131,12 +187,13 @@ class MapEngine:
                 if 0 <= row < self.dem_full.shape[0] and 0 <= col < self.dem_full.shape[1]:
                     alt = float(self.dem_full[row, col])
                     
-                    # 1. Normal case: If it's a valid mountain elevation, return directly
-                    if alt > 5.0: 
+                    # Normal case: any finite value, including sea level or below, is valid.
+                    if math.isfinite(alt):
                         return alt
                     
                     # 2. Patch triggered: If 0 or NODATA void, initiate smart nearest-neighbor pixel interpolation
-                    for radius in range(1, 15):
+                    search_radius = int(self.geography_rules["void_search_radius_pixels"])
+                    for radius in range(1, search_radius + 1):
                         for dy in range(-radius, radius + 1):
                             for dx in range(-radius, radius + 1):
                                 if abs(dx) == radius or abs(dy) == radius:
@@ -144,41 +201,37 @@ class MapEngine:
                                     # Ensure the ray doesn't fly out of the matrix boundary
                                     if 0 <= nr < self.dem_full.shape[0] and 0 <= nc < self.dem_full.shape[1]:
                                         val = float(self.dem_full[nr, nc])
-                                        if val > 5.0: # Borrow the nearest true elevation
+                                        if math.isfinite(val):
                                             return val
             except Exception:
                 pass
                 
-        # Global out-of-bounds fallback: Treat units stepping out of the map boundary as being on a 500m plateau
-        return 500.0
+        return self.fallback_elevation
 
     def get_terrain_complexity(self, lon, lat):
-        """Calculate terrain damping coefficient"""
-        alt = self.get_elevation(lon, lat)
-        slope_factor = abs(math.sin(lon * 5.0) * math.cos(lat * 5.0))
-        if alt > 3000: 
-            return 0.8
-        elif alt > 1500: 
-            return 0.5 + slope_factor * 0.3
-        return 0.2 + slope_factor * 0.2
+        """Return the DLC-backed terrain cost at a map coordinate."""
+        x, y = self.lonlat_to_grid(lon, lat)
+        return float(np.clip(self.cost_matrix[y, x], 0.0, 1.0))
 
     def check_line_of_sight(self, lon1, lat1, lon2, lat2):
         """
         Bresenham pixel-level 3D ray tracing: Earth curvature correction + Anti-out-of-bounds reinforcement
         """
         dist_km = haversine_distance(lon1, lat1, lon2, lat2)
-        if dist_km <= 0.3: 
+        los_rules = self.geography_rules["line_of_sight"]
+        if dist_km <= float(los_rules["automatic_clear_distance_km"]):
             return True 
             
         if not self.use_real_dem or self.dem_full is None or self.transform is None:
             return True
 
-        alt1 = self.get_elevation(lon1, lat1) + 5.0 
-        alt2 = self.get_elevation(lon2, lat2) + 5.0
+        observer_height = float(los_rules["observer_height_m"])
+        alt1 = self.get_elevation(lon1, lat1) + observer_height
+        alt2 = self.get_elevation(lon2, lat2) + observer_height
 
         try:
-            r0, c0 = ~self.transform * (lon1, lat1)
-            r1, c1 = ~self.transform * (lon2, lat2)
+            c0, r0 = ~self.transform * (lon1, lat1)
+            c1, r1 = ~self.transform * (lon2, lat2)
             
             # Safety lock: Ensure both probe ends are inside the matrix, otherwise allow LOS
             if not (0 <= r0 < self.dem_full.shape[0] and 0 <= c0 < self.dem_full.shape[1]):
@@ -201,7 +254,7 @@ class MapEngine:
         if total_pixel_dist == 0: 
             return True
 
-        R_eq = 8500.0  
+        effective_earth_radius = float(los_rules["effective_earth_radius_km"])
         x, y = x0, y0
 
         while True:
@@ -212,7 +265,7 @@ class MapEngine:
                 
                 d1 = dist_km * ratio
                 d2 = dist_km * (1.0 - ratio)
-                drop_m = (d1 * d2) / (2.0 * R_eq) * 1000.0 
+                drop_m = (d1 * d2) / (2.0 * effective_earth_radius) * 1000.0
                 
                 ray_alt = alt1 + (alt2 - alt1) * ratio - drop_m
                 
@@ -234,14 +287,14 @@ class MapEngine:
 
     def lonlat_to_grid(self, lon, lat):
         """Map geographic coordinates to pathfinding grid space"""
-        x = int((lon - self.min_lon) / (self.max_lon - self.min_lon) * self.grid_w)
-        y = int((self.max_lat - lat) / (self.max_lat - self.min_lat) * self.grid_h)
+        x = int(round((lon - self.min_lon) / (self.max_lon - self.min_lon) * (self.grid_w - 1)))
+        y = int(round((self.max_lat - lat) / (self.max_lat - self.min_lat) * (self.grid_h - 1)))
         return max(0, min(self.grid_w - 1, x)), max(0, min(self.grid_h - 1, y))
 
     def grid_to_lonlat(self, x, y):
         """Reverse project pathfinding grid coordinates back to real geographic space"""
-        lon = self.min_lon + (x / self.grid_w) * (self.max_lon - self.min_lon)
-        lat = self.max_lat - (y / self.grid_h) * (self.max_lat - self.min_lat)
+        lon = self.min_lon + (x / max(1, self.grid_w - 1)) * (self.max_lon - self.min_lon)
+        lat = self.max_lat - (y / max(1, self.grid_h - 1)) * (self.max_lat - self.min_lat)
         return lon, lat
 
     def _draw_line_on_grid(self, x0, y0, x1, y1, matrix):
@@ -354,19 +407,20 @@ class MapEngine:
         x, y = self.lonlat_to_grid(lon, lat)
         return self.road_matrix[y][x] == 1
 
-    def find_path(self, start_lon, start_lat, target_lon, target_lat, unit_composition=None):
+    def find_path(self, start_lon, start_lat, target_lon, target_lat, unit_composition=None, unit_capabilities=None):
         start_pos = self.lonlat_to_grid(start_lon, start_lat)
         end_pos = self.lonlat_to_grid(target_lon, target_lat)
 
         if start_pos == end_pos: 
             return [(target_lon, target_lat)]
 
-        river_penalty = 50.0 
-        if unit_composition:
-            if unit_composition.get("arm", 0) > 0 or unit_composition.get("art", 0) > 0:
-                river_penalty = 500.0
-            if unit_composition.get("eng", 0) > 0:
-                river_penalty = 10.0
+        capabilities = set(unit_capabilities or [])
+        pathing_rules = self.geography_rules["pathing"]
+        river_penalty = self.river_penalty_default
+        if pathing_rules["heavy_river_crossing_capability"] in capabilities:
+            river_penalty = self.river_penalty_heavy
+        if pathing_rules["river_engineer_capability"] in capabilities:
+            river_penalty = self.river_penalty_engineer
 
         open_set = []
         heapq.heappush(open_set, (0.0, start_pos))
@@ -388,7 +442,7 @@ class MapEngine:
                     is_road = getattr(self, 'road_matrix', None) is not None and self.road_matrix[neighbor[1]][neighbor[0]] == 1
                     
                     if is_road: 
-                        terrain_cost = 0.5 
+                        terrain_cost = self.road_cost
                     else:
                         terrain_cost = self.path_grid[neighbor[1]][neighbor[0]]
                         if getattr(self, 'river_matrix', None) is not None:
@@ -438,8 +492,10 @@ class MapEngine:
 
 
 class ProvinceEngine:
-    def __init__(self, geojson_path):
+    def __init__(self, geojson_path, name_property=""):
         self.provinces = []
+        self.geojson_path = geojson_path
+        self.name_property = name_property
         if not geojson_path or not os.path.exists(geojson_path):
             print(f"⚠️ [Geopolitics] No valid province boundary file provided: {geojson_path}")
             return
@@ -448,29 +504,40 @@ class ProvinceEngine:
             with open(geojson_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 for feat in data.get('features', []):
-                    name = feat['properties'].get('shapeName', 'Unknown')
+                    properties = feat.get('properties') or {}
+                    name = properties.get(self.name_property) if self.name_property else None
+                    if not name:
+                        name = next((value for value in properties.values() if isinstance(value, str) and value.strip()), "Unknown")
                     geom = feat.get('geometry', {})
                     polys = []
                     
-                    if geom.get('type') == 'Polygon': 
-                        polys.append(geom.get('coordinates', [])[0])
+                    if geom.get('type') == 'Polygon':
+                        rings = geom.get('coordinates', [])
+                        if rings:
+                            polys.append({'outer': rings[0], 'holes': rings[1:]})
                     elif geom.get('type') == 'MultiPolygon':
-                        for p in geom.get('coordinates', []): 
-                            polys.append(p[0])
-                            
-                    self.provinces.append({'name': name, 'polygons': polys})
+                        for rings in geom.get('coordinates', []):
+                            if rings:
+                                polys.append({'outer': rings[0], 'holes': rings[1:]})
+
+                    if polys:
+                        self.provinces.append({'name': str(name), 'polygons': polys})
         except Exception as e:
             print(f"⚠️ [Geopolitics] Boundary load failed: {e}")
 
     def get_province(self, lon, lat):
         for prov in self.provinces:
             for poly in prov['polygons']:
-                if self._point_in_polygon(lon, lat, poly): 
+                if self._point_in_polygon(lon, lat, poly['outer']) and not any(
+                    self._point_in_polygon(lon, lat, hole) for hole in poly['holes']
+                ):
                     return prov['name']
         return "Unknown"
 
     def _point_in_polygon(self, x, y, poly):
         n = len(poly)
+        if n < 3:
+            return False
         inside = False
         p1x, p1y = poly[0]
         

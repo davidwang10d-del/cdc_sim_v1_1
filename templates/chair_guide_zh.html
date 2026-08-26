@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>CDC 主席团使用指南</title>
+    <link rel="stylesheet" href="/static/css/style.css" />
+    <style>
+        body { overflow:auto; user-select:text; font-family:"Microsoft YaHei","Segoe UI",Arial,sans-serif; background:#050a0f; color:#c9d1d9; }
+        main { max-width:980px; margin:0 auto; padding:28px 24px 60px; }
+        h1,h2 { color:#58a6ff; }
+        h2 { border-bottom:1px solid #30363d; padding-bottom:6px; margin-top:28px; }
+        p,li { line-height:1.65; }
+        code { background:#0d1117; border:1px solid #30363d; padding:2px 5px; border-radius:3px; }
+        .box { border:1px solid #30363d; background:#0d1117; padding:14px; border-radius:4px; margin:14px 0; }
+        .warn { border-color:#d97706; }
+        .ok { border-color:#2ea043; }
+    </style>
+</head>
+<body>
+<main>
+    <h1>CDC 主席团使用指南</h1>
+    <p>本页面面向没有编程经验的主席、危机团队和会务人员。开会时可以一直打开。</p>
+
+    <div class="box ok">
+        <b>正常启动：</b>双击 <code>START_CDC_SIM.bat</code>，保持黑色窗口打开，然后在浏览器进入 <code>http://127.0.0.1:5000/zh</code>。
+    </div>
+
+    <h2>一、会前准备</h2>
+    <ol>
+        <li>双击 <code>INSTALL_OR_REPAIR.bat</code> 安装或修复环境。</li>
+        <li>双击 <code>START_CDC_SIM.bat</code> 启动服务器。</li>
+        <li>浏览器打开 <code>http://127.0.0.1:5000/zh</code>。</li>
+        <li>点击要使用的 DLC 剧本卡片。</li>
+        <li>等待地图和部队出现。此时不要点击 Play。</li>
+        <li>点击 <code>MUN</code>，阅读委员会名称、角色、规则和各阵营状态。</li>
+        <li>点击 <code>System</code>，选择 <code>Memory Node 1</code>，点击 <code>SAVE</code>。这是初始备份。</li>
+    </ol>
+
+    <h2>二、主席团常用按钮</h2>
+    <ul>
+        <li><code>Play</code>：开始推演时间，部队会移动，战斗可能结算。</li>
+        <li><code>Pause</code>：暂停推演。代表辩论时建议保持暂停。</li>
+        <li><code>MUN</code>：委员会控制面板，用来发布危机更新和录入裁定。</li>
+        <li><code>System</code>：保存、读取、重置。</li>
+        <li><code>Editor</code>：打开 DLC 剧本生成器。</li>
+        <li><code>Guide</code>：打开英文指南；中文指南为 <code>/chair_guide_zh</code>。</li>
+    </ul>
+
+    <h2>三、作战指令</h2>
+    <ul>
+        <li><code>Hold</code>：停止移动，保留当前战斗姿态。</li>
+        <li><code>Relocate</code>：直接机动，不主动发起远程交火；近距离接敌时仍会自卫。</li>
+        <li><code>Planned Route</code>：在地图上连续点击多个航路点，最后统一授权；行军途中保持远程停火。</li>
+        <li><code>Assault</code>：以较慢速度突击，发现敌军进入武器射程后停下交战，接触解除后继续推进。</li>
+        <li><code>Defend Here</code>：停止、恢复并逐步构筑阵地，同时保留所选战斗姿态。</li>
+        <li><code>Fortify</code>：消耗补给并增加疲劳，快速构筑工事；完成后自动转为就地防御。</li>
+    </ul>
+    <p>合并后的 <b>Operational Order</b> 面板包含两个独立选择：<b>Task</b> 决定部队做什么、去哪里；<b>Combat Stance</b> 决定火力纪律、速度、隐蔽、侦察和战斗倍率。更换其中一个不会改变另一个。Relocate 与 Planned Route 始终压制远程主动开火，但保留近距离自卫；Defend 与 Fortify 在任何姿态下都能构筑工事。</p>
+
+    <h2>四、如何录入危机裁定</h2>
+    <ol>
+        <li>点击 <code>MUN</code>。</li>
+        <li>在标题框输入简短标题，例如：<code>补给车队抵达首都</code>。</li>
+        <li>在正文框输入一到两句话，作为可以向代表公开的危机更新。</li>
+        <li>在 <code>Faction or GLOBAL</code> 输入受影响阵营。影响全体时输入 <code>GLOBAL</code>。</li>
+        <li>选择效果：
+            <ul>
+                <li><code>No mechanical effect</code>：只发布剧情，不改变数值。</li>
+                <li><code>Morale +/-</code>：士气、合法性、宣传、恐慌。</li>
+                <li><code>Supply +/-</code>：补给、燃料、弹药、粮食、制裁、援助。</li>
+                <li><code>Fatigue +/-</code>：疲劳、疾病、恶劣天气、休整。</li>
+                <li><code>Combat multiplier</code>：临时战斗加成或惩罚。</li>
+                <li><code>Speed multiplier</code>：临时机动加成或惩罚。</li>
+            </ul>
+        </li>
+        <li>输入数值。普通加减建议 3 到 12；重大事件可用 15 到 25。倍率建议 1.1、1.2、0.9、0.8。</li>
+        <li>勾选公开发布则代表可见；取消勾选则为主席团私密记录。</li>
+        <li>点击 <code>Apply Adjudication</code>。</li>
+    </ol>
+
+    <h2>五、如何制作自己的 DLC</h2>
+    <ol>
+        <li>点击主界面的 <code>Editor</code>。</li>
+        <li>按左侧顺序填写：Scenario & Map、Simulation Rules、Committee、Diplomacy、Units、Battalion Types、Weapons。</li>
+        <li>在 Simulation Rules 中定义战役专用单位类型、能力名称和数值规则；战术指令与战斗姿态属于共享核心规则，在编辑器中为只读。</li>
+        <li>在 Battalion Types 中添加步兵、装甲、炮兵、工兵、民兵等营种。</li>
+        <li>在 Weapons 中设置武器名称和射程。</li>
+        <li>进入 Export 页面，点击 <code>Check Package</code> 检查。</li>
+        <li>点击 <code>Export DLC Zip</code> 导出压缩包。</li>
+        <li>把压缩包解压到项目的 <code>dlc</code> 文件夹下，并给文件夹改一个英文 ID 名称。</li>
+        <li>刷新主界面，新 DLC 就会出现在剧本列表中。</li>
+    </ol>
+
+    <h2>六、常见问题</h2>
+    <ul>
+        <li>浏览器无法连接：确认 <code>START_CDC_SIM.bat</code> 黑色窗口还开着。</li>
+        <li>没有剧本：确认 DLC 文件夹在 <code>dlc</code> 目录内，且有 <code>scenario.json</code>。</li>
+        <li>地图加载慢：高程文件很大，第一次加载需要等待。</li>
+        <li>空投部队不显示：至少选择一个营，并确认实编人数大于零；DLC 中每个营都必须填写正整数 <code>size</code>。</li>
+            <li>炮击失败：部队必须拥有当前 DLC 规则指定的炮击能力，同时需要足够补给且目标在射程内。</li>
+        <li>裁定输错：读取上一个存档，重新录入。</li>
+    </ul>
+
+    <div class="box warn">
+        <b>主席原则：</b>本程序是辅助裁定工具，不替代主席团判断。数值用于保持一致性，危机节奏和政治判断仍由主席团决定。
+    </div>
+</main>
+</body>
+</html>

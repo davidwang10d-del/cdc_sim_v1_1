@@ -1,0 +1,32 @@
+{
+  "faction_a_unit": {
+    "name": "Faction A Unit",
+    "faction": "FACTION_A",
+    "icon": "A",
+    "personnel": 1000,
+    "equipment_level": 1.0,
+    "lon": -1.0,
+    "lat": 0.0,
+    "unit_type": "ARMY",
+    "composition": { "general": 1 },
+    "primary_weapon": "standard",
+    "morale": 70,
+    "stance": "DEFENSIVE",
+    "entrenchment": 0
+  },
+  "faction_b_unit": {
+    "name": "Faction B Unit",
+    "faction": "FACTION_B",
+    "icon": "B",
+    "personnel": 1000,
+    "equipment_level": 1.0,
+    "lon": 1.0,
+    "lat": 0.0,
+    "unit_type": "ARMY",
+    "composition": { "general": 1 },
+    "primary_weapon": "standard",
+    "morale": 70,
+    "stance": "DEFENSIVE",
+    "entrenchment": 0
+  }
+}

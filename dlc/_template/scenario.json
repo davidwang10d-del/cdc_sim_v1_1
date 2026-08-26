@@ -1,0 +1,52 @@
+{
+  "scenario_name": "New MUN Crisis",
+  "description": "A neutral starter package for a custom MUN military-political crisis.",
+  "map_center": [0.0, 0.0],
+  "map_zoom": 4,
+  "map_config": {
+    "bounds": { "min_lon": -10.0, "max_lon": 10.0, "min_lat": -10.0, "max_lat": 10.0 },
+    "grid_resolution": [200, 200],
+    "dem_analysis_resolution": [1200, 1200],
+    "fallback_elevation_m": 0.0,
+    "terrain_elevation_scale_m": 5000.0,
+    "terrain_cost_multiplier": 50.0,
+    "terrain_cost_exponent": 2.0,
+    "pathing": {
+      "road_cost": 0.5,
+      "river_penalty_default": 50.0,
+      "river_penalty_heavy": 500.0,
+      "river_penalty_engineer": 10.0
+    },
+    "dem_dir": "",
+    "dem_file": "",
+    "roads_file": "",
+    "rivers_file": "",
+    "provinces_file": "",
+    "province_name_property": ""
+  },
+  "initial_units_file": "units.json",
+  "simulation_rules_file": "rules.json",
+  "committee": {
+    "committee_name": "Custom Crisis Committee",
+    "committee_type": "continuous_crisis",
+    "simulation_scope": "military_political_crisis",
+    "start_date": "D00",
+    "chair_visibility": "full_map_and_private_records",
+    "delegate_visibility": "faction_limited_fog_of_war",
+    "public_briefing": "Write the delegate-facing briefing here.",
+    "rules_of_engagement": [
+      "Delegates submit directives through crisis staff.",
+      "Chairs adjudicate effects before they alter the map."
+    ],
+    "delegate_roles": [
+      { "faction": "FACTION_A", "role": "Delegation A", "briefing": "Write this delegation's private briefing." },
+      { "faction": "FACTION_B", "role": "Delegation B", "briefing": "Write this delegation's private briefing." }
+    ],
+    "victory_conditions": ["Define a clear political or operational objective."],
+    "staff_notes": "Private chair guidance belongs here."
+  },
+  "diplomacy_blocs": [
+    { "bloc_name": "Faction A", "members": ["FACTION_A"] },
+    { "bloc_name": "Faction B", "members": ["FACTION_B"] }
+  ]
+}

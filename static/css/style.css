@@ -32,12 +32,38 @@ body { margin: 0; padding: 0; background-color: #050a0f; color: #a5d6ff; font-fa
 .comp-item input { width: 40px; background: transparent; border: none; color: #7ee787; text-align: center; font-weight: bold; outline: none;}
 
 /* --- Tactical HUD (Right Panel) --- */
-#tactical-hud { top: 15px; right: 15px; width: 340px; padding: 15px; }
+#tactical-hud { top: 15px; right: 15px; width: 340px; padding: 15px; max-height: calc(100vh - 100px); overflow-y: auto; }
 .data-row { margin-bottom: 5px; font-size: 13px; }
-.data-label { color: #8b949e; display: inline-block; width: 70px; }
+.data-label { color: #8b949e; display: inline-block; width: 105px; }
 
 .telemetry-box { background: rgba(0,0,0,0.5); padding: 8px; border: 1px solid #30363d; color: #7ee787; font-size: 12px; margin: 8px 0; display: flex; flex-direction: column; gap: 5px; box-shadow: inset 0 0 5px #000; }
 .telemetry-row { display: flex; justify-content: space-between; }
+
+/* --- Unified task + stance control --- */
+.operational-order-title { margin-top: 15px; }
+.operational-order-panel { border: 1px solid #30363d; border-left-width: 3px; background: rgba(0,0,0,0.42); padding: 9px; box-shadow: inset 0 0 8px rgba(0,0,0,0.55); }
+.order-section-label { display: flex; justify-content: space-between; align-items: baseline; color: #c9d1d9; font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: .7px; }
+.order-section-label small { color: #6e7681; font-size: 9px; letter-spacing: .4px; }
+.order-status-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-top: 5px; }
+.order-status-heading span:first-child { color: var(--order-color); font-size: 15px; font-weight: bold; }
+.order-status-heading span:last-child { color: #8b949e; font-size: 9px; text-align: right; }
+.order-status-description, .stance-description { color: #8b949e; font-size: 10px; line-height: 1.4; margin-top: 4px; }
+.order-divider { height: 1px; background: #30363d; margin: 9px 0; }
+.stance-control-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; margin-top: 6px; }
+.stance-control-row .dark-input { margin: 0; min-width: 0; }
+.stance-apply { white-space: nowrap; }
+.stance-description { border-left: 2px solid #8b949e; padding-left: 6px; }
+.order-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; margin-top: 7px; }
+.order-metrics span { border: 1px solid #30363d; background: rgba(255,255,255,.035); color: #c9d1d9; padding: 4px 2px; text-align: center; font-size: 9px; }
+.effective-behavior { color: #e3b341; font-size: 10px; line-height: 1.35; margin-top: 7px; }
+.order-boundary-guide { border: 1px dashed #30363d; background: rgba(31,111,235,.07); color: #8b949e; font-size: 10px; line-height: 1.4; padding: 6px; margin-top: 8px; }
+.order-boundary-guide strong { color: #a5d6ff; }
+.order-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 6px; }
+.order-command { min-height: 54px; padding: 5px 3px; color: var(--order-color); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; line-height: 1.15; }
+.order-command:hover { border-color: var(--order-color); box-shadow: 0 0 8px var(--order-color); }
+.order-command.active-order { background: rgba(255,255,255,.10); box-shadow: inset 0 0 7px var(--order-color), 0 0 4px var(--order-color); }
+.order-command-title { color: inherit; font-size: 11px; font-weight: bold; }
+.order-command-summary { color: #8b949e; font-size: 8px; }
 
 /* --- Combat Command Confirmation Panel --- */
 #confirmation-panel {
@@ -80,6 +106,16 @@ body { margin: 0; padding: 0; background-color: #050a0f; color: #a5d6ff; font-fa
 
 /* --- Dynamic Alerts --- */
 #targeting-alert { display: none; position: absolute; top: 70px; left: 50%; transform: translateX(-50%); background: rgba(218, 54, 51, 0.9); color: #fff; padding: 8px 25px; border-radius: 4px; font-weight: bold; z-index: 1000; border: 1px solid #f85149; box-shadow: 0 0 20px #f85149; letter-spacing: 1px; animation: pulse 1s infinite alternate; }
+
+/* --- MUN Committee Control --- */
+.committee-section-title { color: #e3b341; font-weight: bold; font-size: 12px; margin-top: 10px; margin-bottom: 6px; text-transform: uppercase; border-bottom: 1px solid #30363d; padding-bottom: 4px; }
+.committee-rules { margin: 4px 0 0 18px; padding: 0; color: #c9d1d9; font-size: 12px; }
+.committee-role-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.committee-role { border: 1px solid #30363d; background: rgba(255,255,255,0.04); padding: 6px; font-size: 12px; color: #c9d1d9; border-radius: 2px; }
+.committee-role span { color: #8b949e; }
+.committee-faction-row { display: flex; justify-content: space-between; gap: 10px; border-bottom: 1px solid #21262d; padding: 4px 0; font-size: 12px; color: #c9d1d9; }
+.committee-record { border-left: 2px solid #e3b341; padding-left: 8px; margin-bottom: 8px; color: #c9d1d9; font-size: 12px; }
+.committee-record small { color: #8b949e; }
 
 /* --- Leaflet Map Overrides --- */
 .leaflet-bottom.leaflet-left { margin-bottom: 140px; margin-left: 15px; }

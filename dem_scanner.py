@@ -1,4 +1,5 @@
 import os
+import argparse
 import numpy as np
 import requests
 try:
@@ -13,7 +14,7 @@ except ImportError:
 # ==========================================
 # 模块 1：本地 TIF 高程图“X光”扫描诊断
 # ==========================================
-def scan_local_dem(tif_path):
+def scan_local_dem(tif_path, output_file=None, show_plot=True):
     print(f"\n🔍 [GIS 诊断室] 正在对高程图进行 X 光扫描: {tif_path}")
     if not os.path.exists(tif_path):
         print(f"❌ 找不到文件: {tif_path}")
@@ -32,11 +33,9 @@ def scan_local_dem(tif_path):
         # 统计物理黑洞
         total_pixels = src.width * src.height
         
-        # 将官方空值、负数异常值、绝对 0 值全部视为“空洞”
-        if nodata_val is not None:
-            void_mask = (dem_data == nodata_val) | (dem_data <= 0)
-        else:
-            void_mask = (dem_data <= 0)
+        # Use the raster's validity mask. Sea level, below-sea-level terrain,
+        # and other legitimate non-positive elevations must remain valid.
+        void_mask = src.read_masks(1) == 0
 
         void_pixels = np.sum(void_mask)
         valid_pixels = total_pixels - void_pixels
@@ -71,12 +70,18 @@ def scan_local_dem(tif_path):
         plt.colorbar(im, ax=ax, label='Elevation (meters)')
         plt.xlabel('Longitude')
         plt.ylabel('Latitude')
-        plt.show()
+        if output_file:
+            fig.savefig(output_file, dpi=150, bbox_inches="tight")
+            print(f"✅ 诊断图已保存至: {output_file}")
+        if show_plot:
+            plt.show()
+        else:
+            plt.close(fig)
 
 # ==========================================
 # 模块 2：军工级无缝高程图下载 (OpenTopography)
 # ==========================================
-def download_void_filled_dem(min_lon, min_lat, max_lon, max_lat, output_file, api_key="demo"):
+def download_void_filled_dem(min_lon, min_lat, max_lon, max_lat, output_file, api_key):
     """
     使用 OpenTopography API 下载 SRTM GL3 (90m) 或 GL1 (30m)。
     由于 SRTM GL 系列是经过算法填补的 (Void-Filled)，不会出现 0 米黑洞。
@@ -98,7 +103,7 @@ def download_void_filled_dem(min_lon, min_lat, max_lon, max_lat, output_file, ap
     }
 
     try:
-        response = requests.get(url, params=params, stream=True)
+        response = requests.get(url, params=params, stream=True, timeout=(10, 180))
         if response.status_code == 200:
             with open(output_file, 'wb') as f:
                 for chunk in response.iter_content(chunk_size=8192):
@@ -113,17 +118,37 @@ def download_void_filled_dem(min_lon, min_lat, max_lon, max_lat, output_file, ap
         print(f"❌ [网络异常] {e}")
 
 
+def build_parser():
+    parser = argparse.ArgumentParser(description="Inspect or download a DEM for any CDC Sim DLC.")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    scan_parser = subparsers.add_parser("scan", help="Inspect a local GeoTIFF")
+    scan_parser.add_argument("tif_path")
+    scan_parser.add_argument("--output", help="Save the diagnostic image instead of only showing it")
+    scan_parser.add_argument("--no-show", action="store_true", help="Do not open a plot window")
+
+    download_parser = subparsers.add_parser("download", help="Download an OpenTopography DEM")
+    download_parser.add_argument("--min-lon", type=float, required=True)
+    download_parser.add_argument("--min-lat", type=float, required=True)
+    download_parser.add_argument("--max-lon", type=float, required=True)
+    download_parser.add_argument("--max-lat", type=float, required=True)
+    download_parser.add_argument("--output", required=True)
+    download_parser.add_argument("--api-key", required=True)
+    return parser
+
+
 if __name__ == "__main__":
-    print("="*50)
-    print("CDC 战区高程测绘与诊断系统 v1.0")
-    print("="*50)
-    
-    # 👇 请将这里的路径修改为你实际高程图的路径
-    MY_TIF_PATH = "dlc/afghan/maps/afghan_core_30m.tif"
-    
-    # 1. 扫描你现有的地图
-    scan_local_dem(MY_TIF_PATH)
-    
-    # 2. 如果你想下载一张新的（例如阿富汗中东部坐标），取消下面这行的注释
-    # 注意：下载大范围的 30m 高程图需要你去 opentopography.org 免费注册一个 API_KEY
-    # download_void_filled_dem(min_lon=66.0, min_lat=32.0, max_lon=71.0, max_lat=36.0, output_file="dlc/afghan_1986/maps/afghan_new_void_filled.tif", api_key="你的API_KEY写在这里")
+    args = build_parser().parse_args()
+    if args.command == "scan":
+        scan_local_dem(args.tif_path, output_file=args.output, show_plot=not args.no_show)
+    else:
+        if args.min_lon >= args.max_lon or args.min_lat >= args.max_lat:
+            raise SystemExit("Invalid bounds: minimum values must be lower than maximum values")
+        download_void_filled_dem(
+            min_lon=args.min_lon,
+            min_lat=args.min_lat,
+            max_lon=args.max_lon,
+            max_lat=args.max_lat,
+            output_file=args.output,
+            api_key=args.api_key,
+        )
