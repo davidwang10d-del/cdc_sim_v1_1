@@ -33,6 +33,7 @@ app = Flask(__name__)
 engine = None
 physics_thread = None
 engine_guard = threading.RLock()
+MANUAL_SAVE_SLOTS = ("slot_1", "slot_2", "slot_3")
 
 
 class APIInputError(ValueError):
@@ -80,6 +81,13 @@ def mounted_engine():
     if active is None:
         raise APIInputError("System is idling, please mount a campaign first", 409)
     return active
+
+
+def manual_save_slot(data, default="slot_1"):
+    slot = data.get("slot", default)
+    if slot not in MANUAL_SAVE_SLOTS:
+        raise APIInputError("Choose manual checkpoint 1, 2, or 3")
+    return slot
 
 def start_physics_thread(target_engine=None):
     """Delay activation of the physics timeline after mounting a DLC"""
@@ -298,7 +306,6 @@ def adjudicate_committee_directive():
         data = json_object()
         with active.lock:
             record = active.adjudicate_directive(data)
-            active.save_state()
         return jsonify({"status": "ok", "record": record})
     except APIInputError as exc:
         return api_error(exc, exc.status_code)
@@ -564,7 +571,6 @@ def execute_command():
             else:
                 raise APIInputError(f"Unknown command [{cmd}]")
 
-            active.save_state()
         return jsonify({"status": "ok", "msg": message})
     except APIInputError as exc:
         return api_error(exc, exc.status_code)
@@ -622,7 +628,6 @@ def edit_unit():
                 faction=new_unit.faction,
                 msg_type="system",
             )
-            active.save_state()
         return jsonify({"status": "ok", "unit": new_unit.to_dict()})
     except APIInputError as exc:
         return api_error(exc, exc.status_code)
@@ -677,7 +682,6 @@ def admin_edit():
                     active.detected_units[new_id] = active.detected_units.pop(original_id)
             active.units[new_id] = replacement
             active.log_event(f"[Chair Override] {replacement.name} was updated by crisis staff.", faction="COMMITTEE", msg_type="system")
-            active.save_state()
         return jsonify({"status": "ok", "unit": replacement.to_dict()})
     except APIInputError as exc:
         return api_error(exc, exc.status_code)
@@ -714,7 +718,6 @@ def add_modifier():
             unit = active.units[unit_id]
             unit.modifiers.append({"name": name, "type": mod_type, "value": value, "duration": duration})
             active.log_event(f"[Chair Override] {name} applied to {unit.name}: {mod_type} x{value:g} for {duration:g} hours.", faction="COMMITTEE", msg_type="system")
-            active.save_state()
         return jsonify({"status": "ok"})
     except APIInputError as exc:
         return api_error(exc, exc.status_code)
@@ -736,7 +739,6 @@ def set_influence():
         )
         with active.lock:
             active.province_influence[province] = influence
-            active.save_state()
         return jsonify({"status": "ok"})
     except APIInputError as exc:
         return api_error(exc, exc.status_code)
@@ -759,18 +761,35 @@ def set_diplomacy():
             active.set_alliance(faction_one, faction_two, allied)
             action = "signed" if allied else "abrogated"
             active.log_event(f"🤝 [Diplomatic Radar] {faction_one} and {faction_two} {action} a bilateral non-aggression pact.", faction="SYSTEM")
-            active.save_state()
         return jsonify({"status": "ok"})
     except APIInputError as exc:
         return api_error(exc, exc.status_code)
+
+@app.route('/api/save_slots', methods=['GET'])
+def save_slots_api():
+    try:
+        active = mounted_engine()
+        slots = [active.save_slot_metadata(slot) for slot in MANUAL_SAVE_SLOTS]
+        return jsonify({"status": "ok", "manual_only": True, "slots": slots})
+    except APIInputError as exc:
+        return api_error(exc, exc.status_code)
+
 
 @app.route('/api/save_game', methods=['POST'])
 def save_game_api():
     try:
         active = mounted_engine()
-        slot = json_object().get("slot", "manual_save")
-        active.save_game(slot)
-        return jsonify({"status": "ok"})
+        data = json_object()
+        slot = manual_save_slot(data)
+        with active.lock:
+            if active.save_slot_metadata(slot)["exists"] and data.get("overwrite") is not True:
+                raise APIInputError(f"Checkpoint [{slot}] already contains a save; confirm overwrite", 409)
+            active.save_game(slot)
+        return jsonify({
+            "status": "ok",
+            "msg": f"Manual checkpoint [{slot}] saved.",
+            "slot": active.save_slot_metadata(slot),
+        })
     except APIInputError as exc:
         return api_error(exc, exc.status_code)
     except (OSError, TypeError, ValueError) as exc:
@@ -780,15 +799,24 @@ def save_game_api():
 def load_game_api():
     try:
         active = mounted_engine()
-        slot = json_object().get("slot", "default")
-        if slot == "initial_reset":
-            active.load_initial_scenario()
-            active.save_state()
-            return jsonify({"status": "ok", "msg": "System hard reset, rolled back to the scenario's initial state and paused."})
+        slot = manual_save_slot(json_object())
         success, msg = active.load_game(slot)
         if not success:
             return api_error(msg, 400)
-        return jsonify({"status": "ok", "msg": msg})
+        return jsonify({"status": "ok", "msg": f"Manual checkpoint [{slot}] restored. Simulation is paused."})
+    except APIInputError as exc:
+        return api_error(exc, exc.status_code)
+
+
+@app.route('/api/reset_scenario', methods=['POST'])
+def reset_scenario_api():
+    try:
+        active = mounted_engine()
+        active.load_initial_scenario()
+        return jsonify({
+            "status": "ok",
+            "msg": "Scenario reset to its DLC-authored starting state. Simulation is paused.",
+        })
     except APIInputError as exc:
         return api_error(exc, exc.status_code)
 

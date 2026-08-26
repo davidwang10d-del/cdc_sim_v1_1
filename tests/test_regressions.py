@@ -107,6 +107,41 @@ class EngineRegressionTests(unittest.TestCase):
         self.assertFalse(loaded)
         self.assertEqual(self.sim.game_hours, 7.5)
         self.assertEqual(list(self.sim.units), original_ids)
+        metadata = self.sim.save_slot_metadata("broken")
+        self.assertEqual(metadata["condition"], "invalid")
+        self.assertFalse(metadata["can_load"])
+
+    def test_manual_save_records_clear_checkpoint_metadata(self):
+        self.sim.game_hours = 26.5
+        filename = self.sim.save_game("slot_1")
+
+        save_document = json.loads(filename.read_text(encoding="utf-8"))
+        metadata = self.sim.save_slot_metadata("slot_1")
+        self.assertIn("saved_at_utc", save_document)
+        self.assertEqual(save_document["scenario_name"], self.sim.scenario_data["scenario_name"])
+        self.assertEqual(metadata["condition"], "available")
+        self.assertTrue(metadata["can_load"])
+        self.assertEqual(metadata["game_hours"], 26.5)
+        self.assertEqual(metadata["unit_count"], len(self.sim.units))
+
+    def test_mount_ignores_old_autosave_and_autosave_slot_is_disabled(self):
+        self.sim.game_hours = 42.0
+        manual_file = self.sim.save_game("legacy_source")
+        shutil.copyfile(manual_file, Path(self.temp_dir.name) / "save_autosave.json")
+
+        with self.assertRaisesRegex(ValueError, "Autosave is disabled"):
+            self.sim.save_game("autosave")
+
+        fresh = engine_module.SimulationEngine(
+            "_template",
+            log_file=os.devnull,
+            storage_dir=self.temp_dir.name,
+        )
+        try:
+            self.assertEqual(fresh.game_hours, 0.0)
+            self.assertTrue(fresh.is_paused)
+        finally:
+            fresh.stop()
 
     def test_heartbeat_can_be_stopped_for_remount(self):
         worker = threading.Thread(target=self.sim.run_clock)
@@ -270,6 +305,17 @@ class ServerRegressionTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"readiness check", response.data)
 
+    def test_zeus_console_has_close_control_and_plain_language_actions(self):
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'id="zeus-close-button"', response.data)
+        self.assertIn(b'onclick="toggleAdminConsole()"', response.data)
+        self.assertIn(b"Apply temporary effect to selected unit", response.data)
+        self.assertIn(b"Set personnel", response.data)
+        self.assertIn(b"Mark as allied", response.data)
+        self.assertIn(b"Mark as hostile", response.data)
+        self.assertIn(b"does not issue an attack order", response.data)
+
     def test_malformed_and_unknown_commands_are_errors(self):
         cases = [
             (None, 400),
@@ -295,6 +341,61 @@ class ServerRegressionTests(unittest.TestCase):
         self.assertEqual(self.sim.time_multiplier, 5.0)
         self.assertEqual(self.sim.units[unit_id].stance, "RECON")
         self.assertTrue(self.sim.units[unit_id].has_order_role("assault"))
+
+    def test_accepted_commands_do_not_create_an_automatic_save(self):
+        response = self.client.post("/api/command", json={"command": "speed 5"})
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse((Path(self.temp_dir.name) / "save_autosave.json").exists())
+
+    def test_manual_checkpoint_api_lists_saves_and_restores_paused(self):
+        self.sim.game_hours = 13.25
+        saved = self.client.post("/api/save_game", json={"slot": "slot_1"})
+        self.assertEqual(saved.status_code, 200)
+        self.assertTrue(saved.get_json()["slot"]["can_load"])
+
+        listed = self.client.get("/api/save_slots")
+        slots = {item["slot"]: item for item in listed.get_json()["slots"]}
+        self.assertTrue(listed.get_json()["manual_only"])
+        self.assertEqual(slots["slot_1"]["game_hours"], 13.25)
+        self.assertEqual(slots["slot_2"]["condition"], "empty")
+
+        self.sim.game_hours = 99.0
+        self.sim.is_paused = False
+        restored = self.client.post("/api/load_game", json={"slot": "slot_1"})
+        self.assertEqual(restored.status_code, 200)
+        self.assertEqual(self.sim.game_hours, 13.25)
+        self.assertTrue(self.sim.is_paused)
+
+    def test_save_api_rejects_hidden_or_automatic_slots(self):
+        response = self.client.post("/api/save_game", json={"slot": "autosave"})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json()["status"], "error")
+        self.assertFalse((Path(self.temp_dir.name) / "save_autosave.json").exists())
+
+    def test_existing_checkpoint_requires_explicit_overwrite(self):
+        self.sim.game_hours = 2.0
+        first = self.client.post("/api/save_game", json={"slot": "slot_1"})
+        self.assertEqual(first.status_code, 200)
+
+        self.sim.game_hours = 9.0
+        rejected = self.client.post("/api/save_game", json={"slot": "slot_1"})
+        self.assertEqual(rejected.status_code, 409)
+        self.assertIn("confirm overwrite", rejected.get_json()["msg"])
+
+        accepted = self.client.post(
+            "/api/save_game",
+            json={"slot": "slot_1", "overwrite": True},
+        )
+        self.assertEqual(accepted.status_code, 200)
+        self.assertEqual(accepted.get_json()["slot"]["game_hours"], 9.0)
+
+    def test_scenario_reset_does_not_create_a_backup(self):
+        self.sim.game_hours = 8.0
+        response = self.client.post("/api/reset_scenario")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.sim.game_hours, 0.0)
+        self.assertTrue(self.sim.is_paused)
+        self.assertEqual(list(Path(self.temp_dir.name).glob("save_*.json")), [])
 
     def test_admin_rename_conflict_preserves_both_units(self):
         first_id, second_id = list(self.sim.units)[:2]

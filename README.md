@@ -354,7 +354,7 @@ Before committee:
 2. Mount the correct DLC.
 3. Verify the scenario name, map center, units, factions, and provinces.
 4. Keep the simulation paused.
-5. Create a manual save.
+5. Open **Saves** and store the clean starting state in **Checkpoint 1**.
 6. Review rules, political-axis meaning, diplomacy, and delegate visibility.
 
 During committee:
@@ -373,9 +373,13 @@ After committee:
 
 ## Persistence and remounting
 
-- The simulation autosaves after accepted commands and chair edits.
-- Manual saves are written atomically.
-- Loading always returns the engine to a paused state.
+- Saving is fully manual. Commands, deployments, committee rulings, chair edits, diplomacy changes, and resets never create or update a save automatically.
+- Mounting a DLC always opens its authored starting state; it never silently resumes an old save.
+- Open **Saves** to view three manual checkpoints. Each card shows whether it is empty, when it was saved, its simulation time, unit count, and any DLC/rules compatibility problem.
+- **Save here** writes an empty checkpoint. **Overwrite** asks for confirmation before replacing an existing checkpoint. Saves are written atomically.
+- **Restore** asks for confirmation, replaces the active state, and always leaves the simulation paused.
+- **Reset scenario** is separate from restoring a checkpoint. It returns to the DLC-authored starting state and does not create a backup.
+- Closing the program or changing DLCs discards changes made after the most recent manual save.
 - Save files are tied to their DLC and rules schema.
 - Active waypoints, explicit order modes, prepared defenses, airstrike bases, targets, modifiers, diplomacy, detection, committee records, and logs are restored.
 - Mounting a different DLC builds the replacement completely before stopping the old heartbeat.
@@ -404,7 +408,7 @@ Run the complete regression suite:
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-The suite covers the core-doctrine/DLC boundary, independent task and stance changes, deployment strength, assault contact, holding fire while relocating, stance-independent fortification, save integrity, remount shutdown, malformed commands, admin-edit conflicts, editor data, GIS boundaries, and readiness routing.
+The suite covers the core-doctrine/DLC boundary, independent task and stance changes, deployment strength, assault contact, holding fire while relocating, stance-independent fortification, manual-only persistence, checkpoint metadata and overwrite protection, save integrity, remount shutdown, malformed commands, admin-edit conflicts, editor data, GIS boundaries, and readiness routing.
 
 For a package-level check, open **/status**. Invalid DLC cards show their validation errors and cannot be mounted.
 

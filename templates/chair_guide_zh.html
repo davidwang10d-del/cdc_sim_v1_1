@@ -33,7 +33,7 @@
         <li>点击要使用的 DLC 剧本卡片。</li>
         <li>等待地图和部队出现。此时不要点击 Play。</li>
         <li>点击 <code>MUN</code>，阅读委员会名称、角色、规则和各阵营状态。</li>
-        <li>点击 <code>System</code>，选择 <code>Memory Node 1</code>，点击 <code>SAVE</code>。这是初始备份。</li>
+        <li>点击 <code>Saves</code>，在 <code>Checkpoint 1</code> 点击 <code>Save here</code>。这会手动保存初始备份。</li>
     </ol>
 
     <h2>二、主席团常用按钮</h2>
@@ -41,7 +41,7 @@
         <li><code>Play</code>：开始推演时间，部队会移动，战斗可能结算。</li>
         <li><code>Pause</code>：暂停推演。代表辩论时建议保持暂停。</li>
         <li><code>MUN</code>：委员会控制面板，用来发布危机更新和录入裁定。</li>
-        <li><code>System</code>：保存、读取、重置。</li>
+        <li><code>Saves</code>：手动保存、恢复检查点、重置剧本。</li>
         <li><code>Editor</code>：打开 DLC 剧本生成器。</li>
         <li><code>Guide</code>：打开英文指南；中文指南为 <code>/chair_guide_zh</code>。</li>
     </ul>
@@ -78,7 +78,17 @@
         <li>点击 <code>Apply Adjudication</code>。</li>
     </ol>
 
-    <h2>五、如何制作自己的 DLC</h2>
+    <h2>五、手动保存与恢复</h2>
+    <div class="box warn"><b>系统没有自动保存。</b> 指令、主席团修改和剧本重置只保存在内存中，必须点击保存按钮才会写入检查点。</div>
+    <ol>
+        <li>点击 <code>Saves</code>，查看三个检查点的保存时间、推演时间、部队数量和兼容状态。</li>
+        <li>空检查点点击 <code>Save here</code>；已有检查点点击 <code>Overwrite</code>，并确认覆盖。</li>
+        <li>需要回退时，在最后一个正确的检查点点击 <code>Restore</code>。恢复会覆盖当前状态，并让推演保持暂停。</li>
+        <li>需要重新开始时点击 <code>Reset scenario</code>。重置不会自动生成备份。</li>
+        <li>关闭程序或切换 DLC 前请手动保存，否则上次手动保存后的更改会丢失。</li>
+    </ol>
+
+    <h2>六、如何制作自己的 DLC</h2>
     <ol>
         <li>点击主界面的 <code>Editor</code>。</li>
         <li>按左侧顺序填写：Scenario & Map、Simulation Rules、Committee、Diplomacy、Units、Battalion Types、Weapons。</li>
@@ -91,14 +101,14 @@
         <li>刷新主界面，新 DLC 就会出现在剧本列表中。</li>
     </ol>
 
-    <h2>六、常见问题</h2>
+    <h2>七、常见问题</h2>
     <ul>
         <li>浏览器无法连接：确认 <code>START_CDC_SIM.bat</code> 黑色窗口还开着。</li>
         <li>没有剧本：确认 DLC 文件夹在 <code>dlc</code> 目录内，且有 <code>scenario.json</code>。</li>
         <li>地图加载慢：高程文件很大，第一次加载需要等待。</li>
         <li>空投部队不显示：至少选择一个营，并确认实编人数大于零；DLC 中每个营都必须填写正整数 <code>size</code>。</li>
             <li>炮击失败：部队必须拥有当前 DLC 规则指定的炮击能力，同时需要足够补给且目标在射程内。</li>
-        <li>裁定输错：读取上一个存档，重新录入。</li>
+        <li>裁定输错：恢复上一个手动检查点，重新录入。</li>
     </ul>
 
     <div class="box warn">

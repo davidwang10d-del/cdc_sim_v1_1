@@ -33,7 +33,7 @@
         <li>On the first screen, click the scenario card you want to run.</li>
         <li>Wait until the map appears. Do not press Play yet.</li>
         <li>Click <code>MUN</code>. Read the committee name, rules, roles, and faction readiness.</li>
-        <li>Click <code>System</code>, choose <code>slot_1</code>, then click <code>SAVE</code>. This is your clean starting point.</li>
+        <li>Click <code>Saves</code>, then click <code>Save here</code> on <code>Checkpoint 1</code>. This manually records your clean starting point.</li>
     </ol>
 
     <h2>2. During Debate</h2>
@@ -97,10 +97,12 @@
     </div>
 
     <h2>6. Save, Reset, And Export</h2>
+    <div class="box warn"><b>There is no autosave.</b> Commands, chair edits, and resets remain only in memory until you explicitly save a checkpoint.</div>
     <ol>
-        <li>Save before every major crisis update: click <code>System</code>, choose a slot, click <code>SAVE</code>.</li>
-        <li>If something goes wrong, click <code>System</code>, choose the last good slot, click <code>LOAD</code>.</li>
-        <li>To return to the original scenario, choose <code>Initial State (Hard Reset)</code> and click <code>LOAD</code>.</li>
+        <li>Save before every major crisis update: click <code>Saves</code>, then click <code>Save here</code> on an empty checkpoint or <code>Overwrite</code> on an existing one.</li>
+        <li>Each checkpoint shows its save date, simulation time, unit count, and whether it is compatible with the mounted DLC.</li>
+        <li>If something goes wrong, click <code>Restore</code> on the last good checkpoint. Confirming replaces the current state and leaves the simulation paused.</li>
+        <li>To return to the original scenario, click <code>Reset scenario</code>. This does not create a backup.</li>
         <li>To export a summary, click <code>MUN</code>, then <code>Export SITREP</code>. A Markdown file downloads.</li>
     </ol>
 
@@ -123,7 +125,7 @@
         <li><b>Map loads slowly:</b> wait. DEM terrain files are large.</li>
         <li><b>An airdropped unit does not appear:</b> choose at least one battalion and confirm deployed personnel is greater than zero. Every battalion must have a positive <code>size</code> in its DLC data.</li>
             <li><b>A unit will not bombard:</b> it must receive the bombard capability named by the active DLC rules, have enough supply, and target a point in range.</li>
-        <li><b>You made a bad ruling:</b> load the previous save slot and re-enter the ruling.</li>
+        <li><b>You made a bad ruling:</b> restore the previous manual checkpoint and re-enter the ruling.</li>
     </ul>
 
     <div class="box warn">

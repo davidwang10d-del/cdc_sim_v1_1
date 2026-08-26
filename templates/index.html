@@ -60,7 +60,7 @@
         <button class="cmd-btn" style="border-color:#d2a8ff; color:#d2a8ff;" onclick="toggleAdminConsole()" data-zh="⚡ 上帝">⚡ Zeus</button>
         <button class="cmd-btn" style="border-color:#e3b341; color:#e3b341;" onclick="toggleCommitteePanel()">MUN</button>
         <button class="cmd-btn" style="border-color:#7ee787; color:#7ee787;" onclick="window.open((localStorage.getItem('cdc_lang') === 'zh') ? '/chair_guide_zh' : '/chair_guide', '_blank')">Guide</button>
-        <button class="cmd-btn" style="border-color:#58a6ff; color:#58a6ff;" onclick="toggleSaveLoadPanel()" data-zh="💾 档案">💾 System</button>
+        <button class="cmd-btn" style="border-color:#58a6ff; color:#58a6ff;" onclick="toggleSaveLoadPanel()" data-zh="💾 存档">💾 Saves</button>
         <button class="cmd-btn" style="border-color:#8b949e; color:#8b949e;" onclick="window.open('/editor', '_blank')" data-zh="🔧 编辑器">🔧 Editor</button>
         <div id="pause-status" style="margin-left: 10px; font-size: 12px; color: #ff7b72; white-space: nowrap;" data-zh="[ 已暂停 ]">[ PAUSED ]</div>
     </div>
@@ -86,67 +86,105 @@
     <button class="cmd-btn cmd-warn" style="width:100%; margin-top:5px;" onclick="enableDeployTargeting()" data-zh="📍 在地图上选择空投坐标">📍 Select Drop Zone on Map</button>
 </div>
 
-<div id="admin-console" class="glass-panel" style="display:none; top: 70px; left: 50%; transform: translateX(-50%); width: 320px; padding: 15px; border-color: #d2a8ff; box-shadow: 0 0 15px rgba(210, 168, 255, 0.2); z-index: 1001;">
-    <div class="panel-title" style="color:#d2a8ff; border-color:#d2a8ff;" data-zh="⚡ ZEUS 上帝控制台">⚡ ZEUS ADMIN CONSOLE</div>
-    <div style="margin-bottom: 15px;">
-        <div style="font-size:12px; color:#8b949e; margin-bottom:5px;" data-zh="[ 实时部队状态修改 (BUFF/DEBUFF) ]">[ UNIT MODIFIERS (BUFF/DEBUFF) ]</div>
-        <select id="admin-mod-type" class="dark-input"></select>
-        <div style="display:flex; gap:5px;">
-            <input type="number" id="admin-mod-val" step="0.1" class="dark-input" style="flex:1;" title="Multiplier">
-            <input type="number" id="admin-mod-dur" class="dark-input" style="flex:1;" title="Duration in Hours">
-        </div>
-        <button class="cmd-btn" style="width:100%; border-color:#d2a8ff; color:#d2a8ff;" onclick="applyAdminModifier()" data-zh="💉 对选中部队注入修改器">💉 Inject Modifier to Selected Unit</button>
+<div id="admin-console" class="glass-panel zeus-panel" style="display:none;">
+    <div class="panel-title zeus-panel-header" style="color:#d2a8ff; border-color:#d2a8ff;">
+        <span data-zh="⚡ ZEUS 主席控制台">⚡ ZEUS CHAIR CONSOLE</span>
+        <button id="zeus-close-button" class="cmd-btn cmd-danger panel-close-button" type="button" onclick="toggleAdminConsole()" aria-label="Close Zeus console" title="Close Zeus console">×</button>
     </div>
-    <div style="margin-bottom: 15px; border-top: 1px dashed #30363d; padding-top: 10px;">
-        <div style="font-size:12px; color:#8b949e; margin-bottom:5px;" data-zh="[ 强行修改建制 ]">[ LIVE UNIT OVERRIDE ]</div>
-        <div style="display:flex; gap:5px;">
-            <input type="number" id="admin-edit-hp" placeholder="Set Personnel" class="dark-input" style="flex:1;">
-            <button class="cmd-btn cmd-danger" style="flex:1;" onclick="forceUnitHP()" data-zh="⚙️ 设置兵力">⚙️ Set HP</button>
+
+    <div id="zeus-selected-unit" class="zeus-target" data-zh="目标部队：请先在地图上选择一支部队。">Target unit: select a unit on the map first.</div>
+
+    <section class="zeus-section">
+        <div class="zeus-section-title" data-zh="1. 临时部队效果">1. Temporary unit effect</div>
+        <p class="zeus-description" data-zh="对地图上选中的部队施加限时倍率。1.0 表示不变，1.2 表示增加 20%，0.8 表示减少 20%。">Apply a temporary multiplier to the selected map unit. 1.0 means no change, 1.2 means +20%, and 0.8 means −20%.</p>
+        <label class="zeus-field-label" for="admin-mod-type" data-zh="影响项目">Effect</label>
+        <select id="admin-mod-type" class="dark-input" onchange="updateZeusModifierHelp()"></select>
+        <div id="zeus-modifier-help" class="zeus-control-help" data-zh="选择要临时改变的部队能力。">Choose which unit capability to change temporarily.</div>
+        <div class="zeus-field-grid">
+            <label><span data-zh="倍率">Multiplier</span><input type="number" id="admin-mod-val" step="0.1" class="dark-input" inputmode="decimal"></label>
+            <label><span data-zh="持续推演小时">Simulation hours</span><input type="number" id="admin-mod-dur" step="0.1" class="dark-input" inputmode="decimal"></label>
         </div>
-    </div>
-    <div style="border-top: 1px dashed #30363d; padding-top: 10px;">
-        <div style="font-size:12px; color:#8b949e; margin-bottom:5px;" data-zh="[ 外交关系强行介入 ]">[ DIPLOMATIC OVERRIDE ]</div>
-        <div style="display:flex; gap:5px;">
-            <input type="text" id="admin-dip-f1" placeholder="Faction A" class="dark-input" style="flex:1;">
-            <input type="text" id="admin-dip-f2" placeholder="Faction B" class="dark-input" style="flex:1;">
+        <button id="zeus-apply-modifier" class="cmd-btn zeus-primary-button" type="button" onclick="applyAdminModifier()" data-zh="应用临时效果到选中部队">Apply temporary effect to selected unit</button>
+        <p class="zeus-button-description" data-zh="此按钮只影响当前选中的部队；效果会在设定的推演小时后自动结束。">Affects only the selected unit and expires automatically after the entered simulation hours.</p>
+    </section>
+
+    <section class="zeus-section">
+        <div class="zeus-section-title" data-zh="2. 立即设定部队兵力">2. Set unit personnel now</div>
+        <p class="zeus-description" data-zh="把选中部队的当前人数直接改为指定整数。不会改变装备、补给、士气或编制；设为 0 会使该部队失去有效兵力。">Immediately replaces the selected unit’s current personnel with the entered whole number. Equipment, supply, morale, and composition are unchanged; 0 leaves the unit with no effective strength.</p>
+        <label class="zeus-field-label" for="admin-edit-hp" data-zh="新的当前人数">New current personnel</label>
+        <div class="zeus-inline-action">
+            <input type="number" id="admin-edit-hp" min="0" step="1" placeholder="Whole number, 0 or greater" class="dark-input" inputmode="numeric">
+            <button id="zeus-set-personnel" class="cmd-btn cmd-danger" type="button" onclick="forceUnitHP()" data-zh="设定兵力">Set personnel</button>
         </div>
-        <div style="display:flex; gap:5px; margin-top:5px;">
-            <button class="cmd-btn" style="flex:1; border-color:#7ee787; color:#7ee787;" onclick="forceDiplomacy(true)" data-zh="🤝 强制和平">🤝 Force Peace</button>
-            <button class="cmd-btn cmd-danger" style="flex:1;" onclick="forceDiplomacy(false)" data-zh="⚔️ 宣战">⚔️ Declare War</button>
+        <p class="zeus-button-description" data-zh="此操作立即生效，且不会自动保存。">Takes effect immediately and is not saved automatically.</p>
+    </section>
+
+    <section class="zeus-section">
+        <div class="zeus-section-title" data-zh="3. 设定两阵营关系">3. Set relationship between factions</div>
+        <p class="zeus-description" data-zh="输入两个现有阵营的准确名称。设为盟友后双方部队不再互相视为敌军；设为敌对后，双方可依照现有命令和侦察结果交战。">Enter the exact names of two existing factions. Allied factions stop treating each other as enemies; hostile factions may engage according to their current orders and detection.</p>
+        <div class="zeus-field-grid">
+            <label><span data-zh="阵营 A">Faction A</span><input type="text" id="admin-dip-f1" placeholder="Exact faction name" class="dark-input"></label>
+            <label><span data-zh="阵营 B">Faction B</span><input type="text" id="admin-dip-f2" placeholder="Exact faction name" class="dark-input"></label>
         </div>
-    </div>
+        <div class="zeus-diplomacy-actions">
+            <button id="zeus-set-allied" class="cmd-btn" type="button" onclick="forceDiplomacy(true)" data-zh="🤝 设为盟友">🤝 Mark as allied</button>
+            <button id="zeus-set-hostile" class="cmd-btn cmd-danger" type="button" onclick="forceDiplomacy(false)" data-zh="⚔️ 设为敌对">⚔️ Mark as hostile</button>
+        </div>
+        <div class="zeus-button-guide">
+            <span data-zh="“设为盟友”会建立双向同盟关系。">“Mark as allied” creates a two-way alliance.</span>
+            <span data-zh="“设为敌对”会移除双方同盟，但不会自动下达攻击命令。">“Mark as hostile” removes that alliance; it does not issue an attack order.</span>
+        </div>
+    </section>
+
+    <div id="zeus-status" class="zeus-status" role="status" aria-live="polite" data-zh="选择部队后即可使用部队效果和兵力控制；外交控制不需要选择部队。">Select a unit for effect and personnel controls. Diplomacy controls do not require a selected unit.</div>
 </div>
 
-<div id="save-load-panel" class="glass-panel" style="display:none; top: 70px; left: 50%; transform: translateX(-50%); width: 320px; padding: 15px; border-color: #58a6ff; box-shadow: 0 0 15px rgba(88, 166, 255, 0.2); z-index: 1002;">
+<div id="save-load-panel" class="glass-panel save-load-panel" style="display:none;">
     <div class="panel-title" style="color:#58a6ff; border-color:#58a6ff; display:flex; justify-content:space-between; align-items:center;">
-        <span data-zh="💾 战区档案管理">💾 ARCHIVE MANAGEMENT</span>
+        <span data-zh="💾 手动保存与恢复">💾 MANUAL SAVE &amp; RESTORE</span>
         <button class="cmd-btn cmd-danger" style="padding:2px 6px; font-size:10px;" onclick="toggleSaveLoadPanel()">X</button>
     </div>
-    
-    <div style="margin-bottom: 15px;">
-        <div style="font-size:12px; color:#8b949e; margin-bottom:5px;" data-zh="[ 写入态势记忆 ]">[ SAVE THEATER STATE ]</div>
-        <div style="display:flex; gap:5px;">
-            <select id="save-slot" class="dark-input" style="flex:2;">
-                <option value="slot_1" data-zh="记忆节点 1 (Slot 1)">Memory Node 1 (Slot 1)</option>
-                <option value="slot_2" data-zh="记忆节点 2 (Slot 2)">Memory Node 2 (Slot 2)</option>
-                <option value="slot_3" data-zh="记忆节点 3 (Slot 3)">Memory Node 3 (Slot 3)</option>
-            </select>
-            <button class="cmd-btn" style="flex:1; border-color:#7ee787; color:#7ee787;" onclick="saveGame()" data-zh="写入">SAVE</button>
+
+    <div class="manual-save-notice">
+        <strong data-zh="仅手动保存。">Manual saving only.</strong>
+        <span data-zh="只有点击“保存到此处”才会写入进度。关闭程序或切换 DLC 会丢失尚未手动保存的更改。">Progress is written only when you click “Save here.” Closing the app or changing DLCs discards changes you have not manually saved.</span>
+    </div>
+
+    <div id="save-slot-list" class="save-slot-list">
+        <div class="save-slot-card" data-save-slot="slot_1">
+            <div class="save-slot-heading"><strong data-zh="检查点 1">Checkpoint 1</strong><span id="slot_1-state">Checking…</span></div>
+            <div id="slot_1-meta" class="save-slot-meta" data-zh="正在读取存档信息…">Reading checkpoint information…</div>
+            <div class="save-slot-actions">
+                <button id="slot_1-save" class="cmd-btn save-slot-save" onclick="saveGame('slot_1')" data-zh="保存到此处">Save here</button>
+                <button id="slot_1-load" class="cmd-btn cmd-warn save-slot-load" onclick="loadGame('slot_1')" data-zh="恢复此检查点" disabled>Restore</button>
+            </div>
+        </div>
+        <div class="save-slot-card" data-save-slot="slot_2">
+            <div class="save-slot-heading"><strong data-zh="检查点 2">Checkpoint 2</strong><span id="slot_2-state">Checking…</span></div>
+            <div id="slot_2-meta" class="save-slot-meta" data-zh="正在读取存档信息…">Reading checkpoint information…</div>
+            <div class="save-slot-actions">
+                <button id="slot_2-save" class="cmd-btn save-slot-save" onclick="saveGame('slot_2')" data-zh="保存到此处">Save here</button>
+                <button id="slot_2-load" class="cmd-btn cmd-warn save-slot-load" onclick="loadGame('slot_2')" data-zh="恢复此检查点" disabled>Restore</button>
+            </div>
+        </div>
+        <div class="save-slot-card" data-save-slot="slot_3">
+            <div class="save-slot-heading"><strong data-zh="检查点 3">Checkpoint 3</strong><span id="slot_3-state">Checking…</span></div>
+            <div id="slot_3-meta" class="save-slot-meta" data-zh="正在读取存档信息…">Reading checkpoint information…</div>
+            <div class="save-slot-actions">
+                <button id="slot_3-save" class="cmd-btn save-slot-save" onclick="saveGame('slot_3')" data-zh="保存到此处">Save here</button>
+                <button id="slot_3-load" class="cmd-btn cmd-warn save-slot-load" onclick="loadGame('slot_3')" data-zh="恢复此检查点" disabled>Restore</button>
+            </div>
         </div>
     </div>
 
-    <div style="border-top: 1px dashed #30363d; padding-top: 10px;">
-        <div style="font-size:12px; color:#8b949e; margin-bottom:5px;" data-zh="[ 载入历史态势 ]">[ LOAD THEATER STATE ]</div>
-        <div style="display:flex; gap:5px;">
-            <select id="load-slot" class="dark-input" style="flex:2;">
-                <option value="slot_1" data-zh="记忆节点 1 (Slot 1)">Memory Node 1 (Slot 1)</option>
-                <option value="slot_2" data-zh="记忆节点 2 (Slot 2)">Memory Node 2 (Slot 2)</option>
-                <option value="slot_3" data-zh="记忆节点 3 (Slot 3)">Memory Node 3 (Slot 3)</option>
-                <option value="initial_reset" data-zh="原始推演起点 (Hard Reset)">Initial State (Hard Reset)</option>
-            </select>
-            <button class="cmd-btn cmd-warn" style="flex:1;" onclick="loadGame()" data-zh="载入">LOAD</button>
+    <div id="save-load-status" class="save-load-status" role="status" aria-live="polite" data-zh="选择一个检查点进行手动保存或恢复。">Choose a checkpoint to save or restore manually.</div>
+
+    <div class="scenario-reset-section">
+        <div>
+            <strong data-zh="重新开始当前剧本">Restart the current scenario</strong>
+            <span data-zh="恢复 DLC 编写的初始状态；不会自动创建备份。">Return to the DLC-authored starting state. No backup is created automatically.</span>
         </div>
-        <div style="font-size:10px; color:#ff7b72; margin-top:5px; text-align:center;" data-zh="* 警告：载入将直接覆盖当前沙盘">* WARNING: Loading overwrites active sandbox.</div>
+        <button id="scenario-reset-button" class="cmd-btn cmd-danger" onclick="resetScenario()" data-zh="重置剧本">Reset scenario</button>
     </div>
 </div>
 

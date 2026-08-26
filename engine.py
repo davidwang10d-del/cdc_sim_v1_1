@@ -5,6 +5,7 @@ import json
 import random
 import sys
 from copy import deepcopy
+from datetime import datetime, timezone
 from pathlib import Path
 import re
 import threading
@@ -90,12 +91,10 @@ class SimulationEngine:
         
         self._init_log_file()
             
-        if self._save_path("autosave").exists():
-            loaded, _ = self.load_game("autosave")
-            if not loaded:
-                self.load_initial_scenario()
-        else:
-            self.load_initial_scenario()
+        # Mounting a DLC always starts from its authored scenario. Persistence is
+        # deliberately manual so an old checkpoint can never replace a fresh
+        # committee session without the chair choosing Restore.
+        self.load_initial_scenario()
 
     def _build_committee_config(self):
         return deepcopy(self.scenario_data["committee"])
@@ -191,6 +190,8 @@ class SimulationEngine:
     def _save_path(self, slot_name):
         if not isinstance(slot_name, str) or not _SAVE_SLOT_PATTERN.fullmatch(slot_name):
             raise ValueError("Save slot must use 1-32 letters, numbers, dashes, or underscores")
+        if slot_name.lower() == "autosave":
+            raise ValueError("Autosave is disabled; choose a manual checkpoint")
         return self.storage_dir / f"save_{slot_name}.json"
 
     def save_game(self, slot_name):
@@ -200,7 +201,9 @@ class SimulationEngine:
             save_data = {
                 "format_version": 2,
                 "dlc_id": self.dlc_id,
+                "scenario_name": self.scenario_data.get("scenario_name", self.dlc_id),
                 "rules_schema_version": self.rules["schema_version"],
+                "saved_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
                 "game_hours": self.game_hours,
                 "time_multiplier": self.time_multiplier,
                 "is_paused": self.is_paused,
@@ -223,9 +226,86 @@ class SimulationEngine:
                 except OSError:
                     pass
 
-            if slot_name != "autosave":
-                self.log_event(f"💾 [System] Battle state backed up to: [{slot_name}]", faction="SYSTEM")
+            self.log_event(f"💾 [System] Battle state manually saved to: [{slot_name}]", faction="SYSTEM")
         return filename
+
+    def save_slot_metadata(self, slot_name):
+        """Return display-safe metadata without changing the active simulation."""
+        filename = self._save_path(slot_name)
+        result = {
+            "slot": slot_name,
+            "exists": filename.exists(),
+            "can_load": False,
+            "condition": "empty",
+            "message": "Empty checkpoint",
+            "saved_at_utc": None,
+            "game_hours": None,
+            "unit_count": None,
+            "dlc_id": None,
+            "scenario_name": None,
+            "legacy": False,
+        }
+        if not result["exists"]:
+            return result
+
+        try:
+            with open(filename, 'r', encoding='utf-8') as f:
+                save_data = json.load(f)
+            if not isinstance(save_data, dict):
+                raise ValueError("Save root must be an object")
+
+            format_version = save_data.get("format_version", 1)
+            if isinstance(format_version, bool) or format_version not in (1, 2):
+                raise ValueError(f"Unsupported save format [{format_version}]")
+
+            game_hours = float(save_data.get("game_hours", 0.0))
+            time_multiplier = float(save_data.get("time_multiplier", 1.0))
+            raw_units = save_data.get("units", {})
+            if not math.isfinite(game_hours) or game_hours < 0:
+                raise ValueError("Save has invalid game time")
+            if not math.isfinite(time_multiplier) or time_multiplier <= 0:
+                raise ValueError("Save has invalid time multiplier")
+            if not isinstance(raw_units, dict):
+                raise ValueError("Save units must be an object")
+
+            saved_at = save_data.get("saved_at_utc")
+            if not isinstance(saved_at, str) or not saved_at.strip():
+                saved_at = datetime.fromtimestamp(filename.stat().st_mtime, tz=timezone.utc).isoformat(
+                    timespec="seconds"
+                ).replace("+00:00", "Z")
+
+            saved_dlc = save_data.get("dlc_id")
+            saved_schema = save_data.get("rules_schema_version")
+            result.update({
+                "saved_at_utc": saved_at,
+                "game_hours": game_hours,
+                "unit_count": len(raw_units),
+                "dlc_id": saved_dlc,
+                "scenario_name": save_data.get("scenario_name") or saved_dlc,
+                "legacy": not bool(saved_dlc),
+            })
+            if saved_dlc and saved_dlc != self.dlc_id:
+                result.update({
+                    "condition": "wrong_dlc",
+                    "message": f"Saved for DLC [{saved_dlc}]",
+                })
+            elif saved_schema is not None and saved_schema != self.rules["schema_version"]:
+                result.update({
+                    "condition": "incompatible_rules",
+                    "message": "Rules version is incompatible",
+                })
+            else:
+                result.update({
+                    "can_load": True,
+                    "condition": "available",
+                    "message": "Legacy checkpoint (DLC not recorded)" if not saved_dlc else "Ready to restore",
+                })
+        except (OSError, OverflowError, json.JSONDecodeError, TypeError, ValueError) as exc:
+            result.update({
+                "condition": "invalid",
+                "message": f"Invalid checkpoint: {exc}",
+            })
+        return result
 
     def load_game(self, slot_name):
         try:
@@ -240,6 +320,10 @@ class SimulationEngine:
                 save_data = json.load(f)
             if not isinstance(save_data, dict):
                 raise ValueError("Save root must be an object")
+
+            format_version = save_data.get("format_version", 1)
+            if isinstance(format_version, bool) or format_version not in (1, 2):
+                raise ValueError(f"Unsupported save format [{format_version}]")
 
             saved_dlc = save_data.get("dlc_id")
             if saved_dlc and saved_dlc != self.dlc_id:
@@ -278,7 +362,7 @@ class SimulationEngine:
                 raise ValueError("Save contains invalid map, detection, or diplomacy state")
             if not isinstance(committee_records, list) or not isinstance(structured_logs, list):
                 raise ValueError("Save contains invalid committee or log records")
-        except (OSError, json.JSONDecodeError, TypeError, ValueError, KeyError) as exc:
+        except (OSError, OverflowError, json.JSONDecodeError, TypeError, ValueError, KeyError) as exc:
             return False, f"Save is invalid: {exc}"
 
         # Commit only after every field and unit has been parsed successfully.
@@ -295,9 +379,6 @@ class SimulationEngine:
             self.units = restored_units
             self.log_event(f"📂 [System] Save file awakened: [{slot_name}]", faction="SYSTEM")
         return True, "Load successful"
-
-    def save_state(self):
-        self.save_game("autosave")
 
     def stop(self):
         """Request a clean shutdown of this engine's heartbeat loop."""

@@ -69,6 +69,54 @@ let heartbeatInterval = null;
 let committeeState = null;
 let availableFactions = [];
 let mapClickHandler = null;
+let tacticalHudPointerActive = false;
+let tacticalHudPointerReleaseFrame = null;
+let stateRequestSequence = 0;
+let latestAppliedStateRequest = 0;
+let saveSlotCatalog = {};
+let saveLoadBusy = false;
+
+document.addEventListener('pointerdown', event => {
+    if (event.target?.closest?.('#tactical-hud')) {
+        tacticalHudPointerActive = true;
+        if (tacticalHudPointerReleaseFrame !== null) {
+            cancelAnimationFrame(tacticalHudPointerReleaseFrame);
+            tacticalHudPointerReleaseFrame = null;
+        }
+    }
+}, true);
+
+function releaseTacticalHudPointer() {
+    if (!tacticalHudPointerActive) return;
+    if (tacticalHudPointerReleaseFrame !== null) cancelAnimationFrame(tacticalHudPointerReleaseFrame);
+    // Keep the lock through the click event so polling cannot replace its target
+    // between pointer-up and click dispatch.
+    tacticalHudPointerReleaseFrame = requestAnimationFrame(() => {
+        tacticalHudPointerActive = false;
+        tacticalHudPointerReleaseFrame = null;
+    });
+}
+
+document.addEventListener('pointerup', releaseTacticalHudPointer, true);
+document.addEventListener('pointercancel', releaseTacticalHudPointer, true);
+window.addEventListener('blur', () => {
+    tacticalHudPointerActive = false;
+    if (tacticalHudPointerReleaseFrame !== null) cancelAnimationFrame(tacticalHudPointerReleaseFrame);
+    tacticalHudPointerReleaseFrame = null;
+});
+
+function tacticalHudInteractionInProgress(container) {
+    const active = document.activeElement;
+    const focusedEditor = active
+        && container.contains(active)
+        && active.matches('select, input, textarea, button, [contenteditable="true"]');
+    return tacticalHudPointerActive || Boolean(focusedEditor);
+}
+
+function releaseFocusedTacticalHudButton() {
+    const active = document.activeElement;
+    if (active?.matches?.('button') && active.closest?.('#tactical-hud')) active.blur();
+}
 
 function escapeHtml(value) {
     return String(value ?? '')
@@ -236,7 +284,7 @@ function updateRuleDrivenUI() {
     for (const type of modifierRules.allowed_types) {
         const option = document.createElement('option');
         option.value = type;
-        option.textContent = type.replaceAll('_', ' ');
+        option.textContent = zeusModifierLabel(type);
         modifierSelect.appendChild(option);
     }
     const modifierValue = document.getElementById('admin-mod-val');
@@ -247,6 +295,7 @@ function updateRuleDrivenUI() {
     modifierDuration.min = modifierRules.duration_minimum_hours;
     modifierDuration.max = modifierRules.duration_maximum_hours;
     modifierDuration.value = modifierRules.default_duration_hours;
+    updateZeusModifierHelp();
 
     const directiveRules = globalRules.directives;
     const effectSelect = document.getElementById('committee-effect');
@@ -355,6 +404,7 @@ function enableDeployTargeting() {
 }
 
 function setTargetingMode(actionStr) {
+    releaseFocusedTacticalHudButton();
     pendingAction = actionStr; clearDraft(); pendingAction = actionStr; 
     const role = actionStr === 'attack' ? 'assault' : (actionStr === 'move' ? 'relocate' : actionStr);
     const profile = orderProfileByRole(role);
@@ -474,6 +524,7 @@ function clearDraft() {
 }
 
 async function sendCommand(cmdStr) {
+    releaseFocusedTacticalHudButton();
     try {
         const result = await fetchJson('/api/command', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({command: cmdStr}) });
         fetchState();
@@ -513,7 +564,10 @@ function getUnitIcon(u) {
 }    
 
 function fetchState() {
+    const requestSequence = ++stateRequestSequence;
     return fetchJson('/api/state').then(data => {
+        if (requestSequence < latestAppliedStateRequest) return;
+        latestAppliedStateRequest = requestSequence;
         if(data.status === "unmounted") return;
         const pad = (n) => (n||0).toString().padStart(2, '0');
         document.getElementById('time-display').innerText = `D${pad(data.time.day)} ${pad(data.time.hour)}:${pad(data.time.minute)}:${pad(data.time.second)}`;
@@ -533,7 +587,9 @@ function fetchState() {
                 pathLine = L.polyline(latlngs, { color: orderProfileForUnit(u).color, dashArray: '5,5', weight: 2, opacity: 0.8 }).addTo(map);
             }
         } else if (selectedUnitId) { selectedUnitId = null; clearDraft(); document.getElementById('unit-info').innerHTML = `<div style="color: #ff7b72; font-weight: bold; text-align: center; padding: 30px 0;">[ SIGNAL LOST ]</div>`; if (pathLine) map.removeLayer(pathLine); }
+        updateZeusTarget(selectedUnitId ? data.units[selectedUnitId] : null);
     }).catch(error => {
+        if (requestSequence < latestAppliedStateRequest) return;
         const statusSpan = document.getElementById('pause-status');
         if (statusSpan) {
             statusSpan.innerText = '[ CONNECTION LOST ]';
@@ -584,12 +640,16 @@ function updateIntelFeed(logs) {
     if (!logs || logs.length === 0) return;
     const container = document.getElementById('logs-container');
     if (logs.length !== lastLogCount || logs[logs.length-1].message !== container.dataset.lastMsg) {
+        const previousScrollTop = container.scrollTop;
         container.innerHTML = logs.slice().reverse().map(log => `<div class="log-entry ${log.type === "combat" ? "log-combat" : (log.type === "move" ? "log-move" : "log-system")}">${escapeHtml(log.message)}</div>`).join('');
+        container.scrollTop = previousScrollTop;
         container.dataset.lastMsg = logs[logs.length-1].message; lastLogCount = logs.length;
     }
 }
 
 function updateTacticalHUD(u) {
+    const unitInfo = document.getElementById('unit-info');
+    if (!unitInfo || tacticalHudInteractionInProgress(unitInfo)) return;
     const compStr = Object.entries(u.composition || {}).filter(([k,v])=>v>0).map(([k,v]) => `${escapeHtml(k)}:${Number(v)}`).join(' | ');
     const capabilities = new Set(u.effective_capabilities || u.capabilities || []);
     const missionButtons = [];
@@ -651,7 +711,9 @@ function updateTacticalHUD(u) {
     // 🟢 Dynamic HUD Color Based on Palette
     const uColor = getFactionColor(u.faction);
 
-    document.getElementById('unit-info').innerHTML = `
+    const tacticalHud = document.getElementById('tactical-hud');
+    const previousScrollTop = tacticalHud?.scrollTop || 0;
+    unitInfo.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid #1f6feb; padding-bottom: 5px;">
             <span style="color:#fff; font-size:15px; font-weight:bold;">${escapeHtml(u.name)}</span><button class="cmd-btn cmd-danger" style="padding: 3px 6px;" onclick="deselectUnit()">❌ Release</button>
         </div>
@@ -705,6 +767,7 @@ function updateTacticalHUD(u) {
         </div>
         ${weaponPanel}
     `;
+    if (tacticalHud) tacticalHud.scrollTop = previousScrollTop;
 }
 // ==========================================
 // IN-GAME EDITOR (ZEUS CONSOLE) LOGIC
@@ -712,20 +775,92 @@ function updateTacticalHUD(u) {
 
 function toggleAdminConsole() {
     const panel = document.getElementById('admin-console');
-    panel.style.display = (panel.style.display === 'none' || panel.style.display === '') ? 'block' : 'none';
+    const opening = panel.style.display === 'none' || panel.style.display === '';
+    panel.style.display = opening ? 'block' : 'none';
+    if (opening) {
+        document.getElementById('deploy-panel').style.display = 'none';
+        document.getElementById('committee-panel').style.display = 'none';
+        document.getElementById('save-load-panel').style.display = 'none';
+        updateZeusTarget(null);
+        fetchState();
+    }
 }
 
-// 💉 Inject Buff/Debuff
-async function applyAdminModifier() {
-    if (!selectedUnitId) {
-        alert("Zeus Error: No unit selected on radar!");
+function zeusModifierLabel(type) {
+    const labels = currentLang === 'zh'
+        ? {combat: '战斗效能', speed: '移动速度', morale: '士气恢复速度'}
+        : {combat: 'Combat effectiveness', speed: 'Movement speed', morale: 'Morale recovery rate'};
+    return labels[type] || String(type).replaceAll('_', ' ');
+}
+
+function updateZeusModifierHelp() {
+    const type = document.getElementById('admin-mod-type')?.value;
+    const help = document.getElementById('zeus-modifier-help');
+    if (!help) return;
+    const descriptions = currentLang === 'zh'
+        ? {
+            combat: '按倍率改变战斗伤害计算，不直接增加人数。',
+            speed: '按倍率改变地图移动速度，不改变攻击命令。',
+            morale: '按倍率改变部队在待命或防御时的士气恢复速度，不会立即增加士气。'
+        }
+        : {
+            combat: 'Multiplies combat effectiveness; it does not add personnel.',
+            speed: 'Multiplies map movement speed; it does not issue a movement order.',
+            morale: 'Multiplies morale recovery while idle or defending; it does not add morale immediately.'
+        };
+    help.textContent = descriptions[type] || (currentLang === 'zh'
+        ? '按输入倍率临时改变此项目。'
+        : 'Temporarily multiplies this effect by the entered value.');
+}
+
+function updateZeusTarget(unit) {
+    const target = document.getElementById('zeus-selected-unit');
+    if (!target) return;
+    if (!unit) {
+        target.textContent = currentLang === 'zh'
+            ? '目标部队：请先在地图上选择一支部队。'
+            : 'Target unit: select a unit on the map first.';
+        target.classList.remove('active');
         return;
     }
-    
+    target.textContent = currentLang === 'zh'
+        ? `目标部队：${unit.name} · ${unit.faction} · ${unit.id}`
+        : `Target unit: ${unit.name} · ${unit.faction} · ${unit.id}`;
+    target.classList.add('active');
+}
+
+function setZeusStatus(message, kind = '') {
+    const status = document.getElementById('zeus-status');
+    if (!status) return;
+    status.textContent = message;
+    status.className = `zeus-status${kind ? ` ${kind}` : ''}`;
+}
+
+async function applyAdminModifier() {
+    if (!selectedUnitId) {
+        setZeusStatus(currentLang === 'zh' ? '请先在地图上选择一支目标部队。' : 'Select a target unit on the map first.', 'error');
+        return;
+    }
+
     const type = document.getElementById('admin-mod-type').value;
-    const val = parseFloat(document.getElementById('admin-mod-val').value);
-    const dur = parseFloat(document.getElementById('admin-mod-dur').value);
-    const modName = val > 1.0 ? "Zeus_Buff" : "Zeus_Debuff";
+    const valueInput = document.getElementById('admin-mod-val').value.trim();
+    const durationInput = document.getElementById('admin-mod-dur').value.trim();
+    const val = Number(valueInput);
+    const dur = Number(durationInput);
+    const rules = globalRules.modifiers;
+    if (!type || !valueInput || !Number.isFinite(val) || val < Number(rules.value_minimum) || val > Number(rules.value_maximum)) {
+        setZeusStatus(currentLang === 'zh'
+            ? `倍率必须在 ${rules.value_minimum} 到 ${rules.value_maximum} 之间。`
+            : `Multiplier must be between ${rules.value_minimum} and ${rules.value_maximum}.`, 'error');
+        return;
+    }
+    if (!durationInput || !Number.isFinite(dur) || dur < Number(rules.duration_minimum_hours) || dur > Number(rules.duration_maximum_hours)) {
+        setZeusStatus(currentLang === 'zh'
+            ? `持续时间必须在 ${rules.duration_minimum_hours} 到 ${rules.duration_maximum_hours} 个推演小时之间。`
+            : `Duration must be between ${rules.duration_minimum_hours} and ${rules.duration_maximum_hours} simulation hours.`, 'error');
+        return;
+    }
+    const modName = `Chair ${type} x${val}`;
 
     try {
         await fetchJson('/api/modifier', {
@@ -733,42 +868,54 @@ async function applyAdminModifier() {
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ id: selectedUnitId, name: modName, type, value: val, duration: dur })
         });
-        fetchState();
+        await fetchState();
+        setZeusStatus(currentLang === 'zh'
+            ? `已对选中部队应用“${zeusModifierLabel(type)}”×${val}，持续 ${dur} 个推演小时。`
+            : `${zeusModifierLabel(type)} ×${val} applied to the selected unit for ${dur} simulation hours.`, 'success');
     } catch (error) {
-        alert(`Modifier rejected: ${error.message}`);
+        setZeusStatus((currentLang === 'zh' ? '临时效果被拒绝：' : 'Temporary effect rejected: ') + error.message, 'error');
     }
 }
 
-// ⚙️ Live HP Edit (Reinforce or Smite)
 async function forceUnitHP() {
     if (!selectedUnitId) {
-        alert("Zeus Error: No unit selected on radar!");
+        setZeusStatus(currentLang === 'zh' ? '请先在地图上选择一支目标部队。' : 'Select a target unit on the map first.', 'error');
         return;
     }
-    
-    const newHP = parseFloat(document.getElementById('admin-edit-hp').value);
-    if (isNaN(newHP) || newHP < 0) return;
+
+    const personnelInput = document.getElementById('admin-edit-hp').value.trim();
+    const newPersonnel = Number(personnelInput);
+    if (!personnelInput || !Number.isInteger(newPersonnel) || newPersonnel < 0) {
+        setZeusStatus(currentLang === 'zh' ? '新兵力必须是大于或等于 0 的整数。' : 'New personnel must be a whole number of 0 or greater.', 'error');
+        return;
+    }
 
     try {
         await fetchJson('/api/admin_edit', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ original_id: selectedUnitId, id: selectedUnitId, personnel: newHP })
+            body: JSON.stringify({ original_id: selectedUnitId, id: selectedUnitId, personnel: newPersonnel })
         });
-        fetchState();
+        await fetchState();
         document.getElementById('admin-edit-hp').value = '';
+        setZeusStatus(currentLang === 'zh'
+            ? `选中部队的当前兵力已设为 ${newPersonnel}；此更改尚未手动保存。`
+            : `Selected unit personnel set to ${newPersonnel}; this change has not been manually saved.`, 'success');
     } catch (error) {
-        alert(`Unit update rejected: ${error.message}`);
+        setZeusStatus((currentLang === 'zh' ? '兵力修改被拒绝：' : 'Personnel change rejected: ') + error.message, 'error');
     }
 }
 
-// 🤝 / ⚔️ Diplomacy Override
 async function forceDiplomacy(isAllied) {
     const f1 = document.getElementById('admin-dip-f1').value.trim();
     const f2 = document.getElementById('admin-dip-f2').value.trim();
 
     if (!f1 || !f2) {
-        alert("Zeus Error: Specify both factions.");
+        setZeusStatus(currentLang === 'zh' ? '请输入两个阵营的准确名称。' : 'Enter the exact names of both factions.', 'error');
+        return;
+    }
+    if (f1 === f2) {
+        setZeusStatus(currentLang === 'zh' ? '请选择两个不同的阵营。' : 'Choose two different factions.', 'error');
         return;
     }
 
@@ -778,11 +925,12 @@ async function forceDiplomacy(isAllied) {
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ f1, f2, allied: isAllied })
         });
-        fetchState();
-        document.getElementById('admin-dip-f1').value = '';
-        document.getElementById('admin-dip-f2').value = '';
+        await fetchState();
+        setZeusStatus(currentLang === 'zh'
+            ? `${f1} 与 ${f2} 已设为${isAllied ? '盟友' : '敌对'}；此操作不会自动下达军事命令。`
+            : `${f1} and ${f2} are now marked as ${isAllied ? 'allied' : 'hostile'}; no military order was issued.`, 'success');
     } catch (error) {
-        alert("Diplomacy override failed: " + error.message);
+        setZeusStatus((currentLang === 'zh' ? '阵营关系修改失败：' : 'Relationship change failed: ') + error.message, 'error');
     }
 }
 // ==========================================
@@ -796,43 +944,185 @@ function toggleSaveLoadPanel() {
         // Hide other panels to avoid clutter
         document.getElementById('admin-console').style.display = 'none';
         document.getElementById('deploy-panel').style.display = 'none';
+        document.getElementById('committee-panel').style.display = 'none';
+        refreshSaveSlots();
     } else {
         panel.style.display = 'none';
     }
 }
 
-async function saveGame() {
-    const slot = document.getElementById('save-slot').value;
+function checkpointLabel(slot) {
+    const number = slot.split('_').at(-1);
+    return currentLang === 'zh' ? `检查点 ${number}` : `Checkpoint ${number}`;
+}
+
+function formatCheckpointTime(gameHours) {
+    if (!Number.isFinite(Number(gameHours))) return currentLang === 'zh' ? '未知推演时间' : 'unknown simulation time';
+    const totalMinutes = Math.max(0, Math.floor(Number(gameHours) * 60));
+    const day = Math.floor(totalMinutes / (24 * 60));
+    const hour = Math.floor((totalMinutes % (24 * 60)) / 60);
+    const minute = totalMinutes % 60;
+    return `D${String(day).padStart(2, '0')} ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+}
+
+function formatSavedAt(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return currentLang === 'zh' ? '时间未知' : 'unknown date';
+    return date.toLocaleString(currentLang === 'zh' ? 'zh-CN' : undefined, {
+        year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
+}
+
+function setSaveLoadStatus(message, kind = '') {
+    const status = document.getElementById('save-load-status');
+    if (!status) return;
+    status.textContent = message;
+    status.className = `save-load-status${kind ? ` ${kind}` : ''}`;
+}
+
+function setSaveLoadBusy(busy) {
+    saveLoadBusy = busy;
+    for (const slot of ['slot_1', 'slot_2', 'slot_3']) {
+        const saveButton = document.getElementById(`${slot}-save`);
+        const loadButton = document.getElementById(`${slot}-load`);
+        if (saveButton) saveButton.disabled = busy;
+        if (loadButton) loadButton.disabled = busy || !saveSlotCatalog[slot]?.can_load;
+    }
+    const resetButton = document.getElementById('scenario-reset-button');
+    if (resetButton) resetButton.disabled = busy;
+}
+
+function renderSaveSlot(slotInfo) {
+    const slot = slotInfo.slot;
+    const card = document.querySelector(`[data-save-slot="${slot}"]`);
+    const state = document.getElementById(`${slot}-state`);
+    const meta = document.getElementById(`${slot}-meta`);
+    const saveButton = document.getElementById(`${slot}-save`);
+    const loadButton = document.getElementById(`${slot}-load`);
+    if (!card || !state || !meta || !saveButton || !loadButton) return;
+
+    card.dataset.condition = slotInfo.condition;
+    const stateLabels = currentLang === 'zh'
+        ? {empty: '空', available: '可恢复', wrong_dlc: '其他 DLC', incompatible_rules: '规则不兼容', invalid: '已损坏'}
+        : {empty: 'Empty', available: 'Ready', wrong_dlc: 'Other DLC', incompatible_rules: 'Incompatible', invalid: 'Invalid'};
+    state.textContent = stateLabels[slotInfo.condition] || slotInfo.condition;
+
+    if (!slotInfo.exists) {
+        meta.textContent = currentLang === 'zh' ? '此检查点尚未保存。' : 'Nothing has been saved here yet.';
+    } else if (slotInfo.can_load) {
+        const legacy = slotInfo.legacy
+            ? (currentLang === 'zh' ? ' · 旧版存档，未记录 DLC' : ' · legacy save; DLC not recorded')
+            : '';
+        const unitText = currentLang === 'zh' ? `${slotInfo.unit_count} 支部队` : `${slotInfo.unit_count} units`;
+        meta.textContent = `${formatSavedAt(slotInfo.saved_at_utc)} · ${formatCheckpointTime(slotInfo.game_hours)} · ${unitText}${legacy}`;
+    } else {
+        const prefix = currentLang === 'zh' ? '无法恢复：' : 'Cannot restore: ';
+        meta.textContent = prefix + slotInfo.message;
+    }
+
+    saveButton.textContent = slotInfo.exists
+        ? (currentLang === 'zh' ? '覆盖此检查点' : 'Overwrite')
+        : (currentLang === 'zh' ? '保存到此处' : 'Save here');
+    saveButton.disabled = saveLoadBusy;
+    loadButton.disabled = saveLoadBusy || !slotInfo.can_load;
+}
+
+async function refreshSaveSlots() {
+    setSaveLoadBusy(true);
+    setSaveLoadStatus(currentLang === 'zh' ? '正在检查手动存档…' : 'Checking manual checkpoints…');
     try {
-        await fetchJson('/api/save_game', {
-            method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ slot })
-        });
-        const isZh = localStorage.getItem('cdc_lang') === 'zh';
-        alert(isZh ? `✅ 战局状态已成功写入：${slot}` : `✅ State successfully saved to: ${slot}`);
-        toggleSaveLoadPanel();
+        const data = await fetchJson('/api/save_slots');
+        saveSlotCatalog = Object.fromEntries(data.slots.map(slot => [slot.slot, slot]));
+        data.slots.forEach(renderSaveSlot);
+        setSaveLoadStatus(currentLang === 'zh'
+            ? '仅手动保存。恢复存档后，推演会保持暂停。'
+            : 'Manual saves only. Restoring a checkpoint leaves the simulation paused.');
     } catch (error) {
-        alert(`Save failed: ${error.message}`);
+        setSaveLoadStatus((currentLang === 'zh' ? '无法读取检查点：' : 'Could not read checkpoints: ') + error.message, 'error');
+    } finally {
+        setSaveLoadBusy(false);
     }
 }
 
-async function loadGame() {
-    const slot = document.getElementById('load-slot').value;
-    const isZh = localStorage.getItem('cdc_lang') === 'zh';
-    
-    if(!confirm(isZh ? "⚠️ 警告：载入档案将覆盖当前的物理引擎状态，确认执行？" : "⚠️ WARNING: Loading will overwrite the current physics engine state. Proceed?")) {
+async function saveGame(slot) {
+    const existing = saveSlotCatalog[slot];
+    if (existing?.exists) {
+        const confirmed = confirm(currentLang === 'zh'
+            ? `覆盖${checkpointLabel(slot)}？原有存档将无法恢复。`
+            : `Overwrite ${checkpointLabel(slot)}? Its current save cannot be recovered.`);
+        if (!confirmed) return;
+    }
+
+    setSaveLoadBusy(true);
+    setSaveLoadStatus(currentLang === 'zh' ? `正在保存${checkpointLabel(slot)}…` : `Saving ${checkpointLabel(slot)}…`);
+    try {
+        const data = await fetchJson('/api/save_game', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({slot, overwrite: Boolean(existing?.exists)})
+        });
+        saveSlotCatalog[slot] = data.slot;
+        renderSaveSlot(data.slot);
+        setSaveLoadStatus(currentLang === 'zh'
+            ? `已手动保存到${checkpointLabel(slot)}。`
+            : `${checkpointLabel(slot)} was saved manually.`, 'success');
+        fetchState();
+    } catch (error) {
+        await refreshSaveSlots();
+        setSaveLoadStatus((currentLang === 'zh' ? '保存失败：' : 'Save failed: ') + error.message, 'error');
+    } finally {
+        setSaveLoadBusy(false);
+    }
+}
+
+async function loadGame(slot) {
+    const slotInfo = saveSlotCatalog[slot];
+    if (!slotInfo?.can_load) {
+        setSaveLoadStatus(currentLang === 'zh' ? '此检查点当前无法恢复。' : 'This checkpoint cannot currently be restored.', 'error');
         return;
     }
-    
+    const confirmed = confirm(currentLang === 'zh'
+        ? `恢复${checkpointLabel(slot)}？上次手动保存之后的所有更改都将丢失。恢复后推演会暂停。`
+        : `Restore ${checkpointLabel(slot)}? All changes made after that manual save will be lost. The simulation will be paused.`);
+    if (!confirmed) return;
+
+    setSaveLoadBusy(true);
+    setSaveLoadStatus(currentLang === 'zh' ? `正在恢复${checkpointLabel(slot)}…` : `Restoring ${checkpointLabel(slot)}…`);
     try {
         await fetchJson('/api/load_game', {
             method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ slot })
         });
-        alert(isZh ? `🔄 记忆读取成功，战局已重置！` : `🔄 Memory read successful. Theater restored and paused.`);
-        toggleSaveLoadPanel();
         deselectUnit();
-        fetchState();
+        await fetchState();
+        setSaveLoadStatus(currentLang === 'zh'
+            ? `已恢复${checkpointLabel(slot)}；推演保持暂停。`
+            : `${checkpointLabel(slot)} restored; the simulation remains paused.`, 'success');
     } catch (error) {
-        alert((isZh ? "读取失败: " : "Load failed: ") + error.message);
+        setSaveLoadStatus((currentLang === 'zh' ? '恢复失败：' : 'Restore failed: ') + error.message, 'error');
+    } finally {
+        setSaveLoadBusy(false);
+    }
+}
+
+async function resetScenario() {
+    const confirmed = confirm(currentLang === 'zh'
+        ? '重置当前剧本？所有未手动保存的更改都会丢失，而且系统不会自动创建备份。'
+        : 'Reset this scenario? All changes not manually saved will be lost, and no backup will be created automatically.');
+    if (!confirmed) return;
+
+    setSaveLoadBusy(true);
+    setSaveLoadStatus(currentLang === 'zh' ? '正在恢复剧本初始状态…' : 'Restoring the scenario starting state…');
+    try {
+        await fetchJson('/api/reset_scenario', {method: 'POST'});
+        deselectUnit();
+        await fetchState();
+        setSaveLoadStatus(currentLang === 'zh'
+            ? '剧本已重置到 DLC 初始状态；未创建自动备份。'
+            : 'Scenario reset to its DLC starting state; no automatic backup was created.', 'success');
+    } catch (error) {
+        setSaveLoadStatus((currentLang === 'zh' ? '重置失败：' : 'Reset failed: ') + error.message, 'error');
+    } finally {
+        setSaveLoadBusy(false);
     }
 }
 
