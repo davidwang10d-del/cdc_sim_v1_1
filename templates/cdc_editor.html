@@ -58,7 +58,8 @@
         <button class="nav-btn" onclick="switchTab('units', this)">6. Units / 部队</button>
         <button class="nav-btn" onclick="switchTab('battalions', this)">7. Battalion Types / 营种</button>
         <button class="nav-btn" onclick="switchTab('weapons', this)">8. Weapons / 武器</button>
-        <button class="nav-btn" onclick="switchTab('export', this)">9. Export / 导出</button>
+        <button class="nav-btn" onclick="switchTab('installations', this)">9. Military Targets / 军事目标</button>
+        <button class="nav-btn" onclick="switchTab('export', this)">10. Export / 导出</button>
     </div>
     <div id="content"></div>
 </div>
@@ -99,7 +100,7 @@ function render() {
         byId("content").innerHTML = `<div class="section"><h2>Loading DLC starter package…</h2></div>`;
         return;
     }
-    const renders = { start: renderStart, scenario: renderScenario, rules: renderRules, committee: renderCommittee, diplomacy: renderDiplomacy, units: renderUnits, battalions: renderBattalions, weapons: renderWeapons, export: renderExport };
+    const renders = { start: renderStart, scenario: renderScenario, rules: renderRules, committee: renderCommittee, diplomacy: renderDiplomacy, units: renderUnits, battalions: renderBattalions, weapons: renderWeapons, installations: renderInstallations, export: renderExport };
     byId("content").innerHTML = renders[currentTab]();
 }
 
@@ -109,12 +110,13 @@ function renderStart() {
         <p class="hint">Fill the tabs from top to bottom. Export creates battle data and special simulation rules that run on the simulator's shared command doctrine.</p>
         <div class="grid">
             <div class="card"><b>1. Scenario & Map</b><p class="small">Name the committee and define map bounds.</p></div>
-            <div class="card"><b>2. Simulation Rules</b><p class="small">Tune clock, readiness, detection, combat, missions, routing, and political influence.</p></div>
+            <div class="card"><b>2. Simulation Rules</b><p class="small">Tune clock, readiness, detection, aircraft types, combat missions, and political influence.</p></div>
             <div class="card"><b>3. Committee</b><p class="small">Add delegate roles, procedure, victory conditions, and staff notes.</p></div>
             <div class="card"><b>4. Diplomacy</b><p class="small">Group factions that start as allies.</p></div>
             <div class="card"><b>5. Units</b><p class="small">Place battle units using DLC-defined types and core combat stances.</p></div>
-            <div class="card"><b>6. Battalion Types</b><p class="small">Define combat, recon, logistics, and capability data.</p></div>
-            <div class="card"><b>7. Weapons</b><p class="small">Define weapon ranges and direct or indirect fire.</p></div>
+            <div class="card"><b>6. Battalion Types</b><p class="small">Define defense, armor generation, logistics, capabilities, and mounted weapon groups.</p></div>
+            <div class="card"><b>7. Weapons</b><p class="small">Define weapon generation, mission roles, and attack/penetration values for every range band.</p></div>
+            <div class="card"><b>8. Military Targets</b><p class="small">Place forts, radar sites, and construction projects. Type effects remain DLC rules.</p></div>
         </div>
         <div class="section"><h2>Map File Rules</h2>
         <p class="hint">Optional map files can be attached in Scenario & Map. DEM files are placed in <code>maps/dem_tiles</code>. Roads, rivers, and province files are placed in <code>maps</code>.</p></div>
@@ -123,6 +125,8 @@ function renderStart() {
 
 function renderScenario() {
     const s = db.scenario, b = s.map_config.bounds;
+    if (!Array.isArray(s.cities)) s.cities = [];
+    if (!Array.isArray(s.province_politics)) s.province_politics = [];
     return `<div class="section"><h2>Scenario & Map / 剧本与地图</h2>
         <div class="grid">
             ${input("Scenario Name / 剧本名称", "scenario.scenario_name", s.scenario_name)}
@@ -150,7 +154,82 @@ function renderScenario() {
             <div><label>River geojson / 河流文件</label><input type="file" accept=".geojson,.json" onchange="mapFiles.rivers = this.files[0] || null"></div>
             <div><label>Province geojson / 省界文件</label><input type="file" accept=".geojson,.json" onchange="mapFiles.provinces = this.files[0] || null"></div>
         </div>
+    </div>
+    ${renderCities()}
+    ${renderProvincePolitics()}`;
+}
+
+function renderCities() {
+    const cities = db.scenario.cities;
+    return `<div class="section"><h2>City Influence Areas / 城市影响区</h2>
+        <p class="hint">Cities affect every army inside their circular area through the existing terrain, cover, frontage, concealment, movement, and fatigue systems. Influence 0 has no effect; 1 represents maximum major-city complexity (for example, New York). Overlapping areas use the strongest influence.</p>
+        <div class="toolbar"><button class="btn secondary" onclick="addCity()">Add City / 添加城市</button></div>
+        ${cities.length ? cities.map((city, i) => `<div class="card">
+            <div class="card-title"><b>${esc(city.name || "New City")} <span class="pill">${esc(city.id)}</span></b><button class="btn danger" onclick="db.scenario.cities.splice(${i},1); render()">Delete</button></div>
+            <div class="grid three">
+                ${cityInput(i, "id", city.id, "City ID / 城市 ID")}
+                ${cityInput(i, "name", city.name, "Name / 名称")}
+                ${cityInput(i, "description", city.description || "", "City Info / 城市信息")}
+                ${cityInput(i, "lon", city.lon, "Longitude / 经度", "number", "0.001", "-180", "180")}
+                ${cityInput(i, "lat", city.lat, "Latitude / 纬度", "number", "0.001", "-90", "90")}
+                ${cityInput(i, "area_km2", city.area_km2 ?? 0, "Area km² / 面积", "number", "0.1", "0")}
+                ${cityInput(i, "influence_rate", city.influence_rate ?? 0, "Influence Rate 0–1 / 影响率", "number", "0.01", "0", "1")}
+            </div>
+        </div>`).join("") : '<div class="card small">No cities configured. The default city influence is 0.</div>'}
     </div>`;
+}
+
+function cityInput(index, key, value, label, type="text", step="", min="", max="") {
+    return `<div><label>${label}</label><input type="${type}" ${step ? `step="${step}"` : ""} ${min !== "" ? `min="${min}"` : ""} ${max !== "" ? `max="${max}"` : ""} value="${esc(value)}" onchange="db.scenario.cities[${index}].${key}=this.type==='number'?n(this.value):this.value"></div>`;
+}
+
+function addCity() {
+    const center = db.scenario.map_center || [0, 0];
+    const used = new Set(db.scenario.cities.map(city => city.id));
+    let suffix = db.scenario.cities.length + 1;
+    while (used.has(`city_${suffix}`)) suffix++;
+    db.scenario.cities.push({
+        id: `city_${suffix}`,
+        name: "New City",
+        description: "",
+        lon: n(center[1], 0),
+        lat: n(center[0], 0),
+        area_km2: 0,
+        influence_rate: 0
+    });
+    render();
+}
+
+function renderProvincePolitics() {
+    const entries = db.scenario.province_politics;
+    return `<div class="section"><h2>Province Politics / 省份政治</h2>
+        <p class="hint">Create one record per province and faction. Civilian sentiment ranges from −1 (maximum opposition), through 0 (indifferent/neutral, the default), to +1 (maximum support). Initial occupation ranges from 0 to 1; military presence changes occupation during play.</p>
+        <div class="toolbar"><button class="btn secondary" onclick="addProvincePolitics()">Add Province-Faction Record / 添加省份阵营</button></div>
+        ${entries.length ? entries.map((entry, i) => `<div class="card">
+            <div class="card-title"><b>${esc(entry.province || "Province")} · ${esc(entry.faction || "Faction")}</b><button class="btn danger" onclick="db.scenario.province_politics.splice(${i},1); render()">Delete</button></div>
+            <div class="grid">
+                ${politicsInput(i, "province", entry.province, "Province Name / 省份名称")}
+                ${politicsInput(i, "faction", entry.faction, "Faction / 阵营")}
+                ${politicsInput(i, "civilian_sentiment", entry.civilian_sentiment ?? 0, "Civilian Sentiment −1 to +1 / 民意", "number", "0.01", "-1", "1")}
+                ${politicsInput(i, "occupation", entry.occupation ?? 0, "Initial Occupation 0–1 / 初始占领", "number", "0.01", "0", "1")}
+            </div>
+        </div>`).join("") : '<div class="card small">No authored tendencies. Every province-faction relationship defaults to neutral sentiment (0) and no occupation (0).</div>'}
+    </div>`;
+}
+
+function politicsInput(index, key, value, label, type="text", step="", min="", max="") {
+    return `<div><label>${label}</label><input type="${type}" ${step ? `step="${step}"` : ""} ${min !== "" ? `min="${min}"` : ""} ${max !== "" ? `max="${max}"` : ""} value="${esc(value)}" onchange="db.scenario.province_politics[${index}].${key}=this.type==='number'?n(this.value):this.value"></div>`;
+}
+
+function addProvincePolitics() {
+    const faction = db.scenario.committee?.delegate_roles?.[0]?.faction || "FACTION";
+    db.scenario.province_politics.push({
+        province: "Province Name",
+        faction,
+        civilian_sentiment: 0,
+        occupation: 0
+    });
+    render();
 }
 
 function renderRules() {
@@ -158,7 +237,7 @@ function renderRules() {
     const stanceNames = Object.values(db.doctrine.stances).map(profile => profile.label).join(", ");
     const orderNames = Object.values(db.doctrine.orders.modes).map(profile => profile.label).join(", ");
     return `<div class="section"><h2>Simulation Rules / 推演规则</h2>
-        <p class="hint">These are scenario-specific values. Tactical orders, combat stances, and their interaction are shared core doctrine and are not duplicated in a DLC.</p>
+        <p class="hint">These are scenario-specific values. Aircraft types and their sortie factors belong here. Tactical orders, combat stances, and their interaction are shared core doctrine and are not duplicated in a DLC.</p>
         <div class="card"><b>Core doctrine (read only)</b><p class="small">Orders: ${esc(orderNames)}</p><p class="small">Stances: ${esc(stanceNames)}</p></div>
         <div class="grid three">
             ${input("Game seconds per real second", "rules.clock.game_seconds_per_real_second", r.clock.game_seconds_per_real_second, "number", "0.1")}
@@ -167,14 +246,20 @@ function renderRules() {
             ${input("Detection probability scale", "rules.detection.probability_scale", r.detection.probability_scale, "number", "0.1")}
             ${input("Contact memory hours", "rules.detection.contact_ttl_hours", r.detection.contact_ttl_hours, "number", "0.1")}
             ${input("Direct combat attack scale", "rules.combat.direct.attack_scale", r.combat.direct.attack_scale, "number", "0.01")}
-            ${input("Routing morale threshold", "rules.combat.routing.morale_threshold", r.combat.routing.morale_threshold, "number", "1")}
             ${input("Bombard casualty coefficient", "rules.missions.bombard.casualty_coefficient", r.missions.bombard.casualty_coefficient, "number", "0.0001")}
+            ${input("Bombard unobserved accuracy", "rules.missions.bombard.unobserved_accuracy_multiplier", r.missions.bombard.unobserved_accuracy_multiplier, "number", "0.05")}
             ${input("Airstrike casualty coefficient", "rules.missions.airstrike.casualty_coefficient", r.missions.airstrike.casualty_coefficient, "number", "0.01")}
-            ${input("Influence shift per hour", "rules.political_influence.shift_per_reference_unit_hour", r.political_influence.shift_per_reference_unit_hour, "number", "0.1")}
+            ${input("Airstrike sortie range (km)", "rules.missions.airstrike.sortie_range_km", r.missions.airstrike.sortie_range_km, "number", "10")}
+            ${input("Airstrike unobserved accuracy", "rules.missions.airstrike.unobserved_accuracy_multiplier", r.missions.airstrike.unobserved_accuracy_multiplier, "number", "0.05")}
+            ${input("Occupation gain per hour", "rules.political_influence.occupation_gain_per_hour", r.political_influence.occupation_gain_per_hour, "number", "0.01")}
+            ${input("Occupation decay per hour", "rules.political_influence.occupation_decay_per_hour", r.political_influence.occupation_decay_per_hour, "number", "0.01")}
+            ${input("Control threshold", "rules.political_influence.control_threshold", r.political_influence.control_threshold, "number", "0.01")}
+            ${input("Control margin", "rules.political_influence.control_margin", r.political_influence.control_margin, "number", "0.01")}
+            ${input("Contested threshold", "rules.political_influence.contested_threshold", r.political_influence.contested_threshold, "number", "0.01")}
         </div>
     </div>
     <div class="section"><h2>Advanced Rules JSON</h2>
-        <p class="hint">Edit the DLC contract here to add battle-specific unit types, capabilities, or detailed coefficients. Core orders and stances cannot be overridden.</p>
+        <p class="hint">Edit the DLC contract here to add battle-specific unit types, aircraft profiles, capabilities, or detailed coefficients. Each aircraft profile must keep every factor from the template. Core orders and stances cannot be overridden.</p>
         <textarea id="rules-json" style="min-height:520px; font-family:Consolas, monospace;">${esc(JSON.stringify(r, null, 2))}</textarea>
         <div class="toolbar" style="margin-top:10px;"><button class="btn secondary" onclick="applyRulesJson()">Apply Advanced JSON</button></div>
     </div>`;
@@ -195,7 +280,8 @@ function applyRulesJson() {
             if (!parsed[key] || typeof parsed[key] !== "object" || Array.isArray(parsed[key])) throw new Error(`Missing required object: ${key}`);
         }
         if (parsed.orders || parsed.stances) throw new Error("orders and stances belong to core doctrine and must not be stored in rules.json.");
-        if (!parsed.combat.direct || !parsed.combat.routing || !parsed.missions.bombard || !parsed.missions.airstrike) throw new Error("Combat and mission rule sections are incomplete.");
+        if (!parsed.combat.direct || !parsed.missions.bombard || !parsed.missions.airstrike) throw new Error("Combat and mission rule sections are incomplete.");
+        if (!parsed.missions.airstrike.aircraft_types?.[parsed.missions.airstrike.default_aircraft_type]) throw new Error("Airstrike rules require aircraft_types and a valid default_aircraft_type.");
         db.rules = parsed;
         alert("Rules JSON applied. Run Check Package before export.");
         render();
@@ -254,65 +340,159 @@ function renderUnits() {
 function renderUnitCard(id, u) {
     const stanceOptions = Object.entries(db.doctrine.stances).map(([v, profile]) => `<option value="${v}" ${u.stance===v?"selected":""}>${esc(profile.label || v)}</option>`).join("");
     const typeOptions = Object.entries(db.rules.unit_types).map(([v, profile]) => `<option value="${v}" ${u.unit_type===v?"selected":""}>${esc(profile.label || v)}</option>`).join("");
-    const weaponOptions = Object.keys(db.weapons).map(w => `<option value="${w}" ${u.primary_weapon===w?"selected":""}>${w}</option>`).join("");
+    const aircraftTypes = db.rules.missions?.airstrike?.aircraft_types || {};
+    const selectedAircraftType = u.aircraft_type || db.rules.missions?.airstrike?.default_aircraft_type || "";
+    const aircraftOptions = Object.entries(aircraftTypes).map(([v, profile]) => `<option value="${v}" ${selectedAircraftType===v?"selected":""}>${esc(profile.label || v)} — ${esc(profile.attack_profile || "")}</option>`).join("");
+    const unitCapabilities = db.rules.unit_types?.[u.unit_type]?.capabilities || [];
+    const hasAirstrike = unitCapabilities.includes(db.rules.missions?.airstrike?.capability);
+    const aircraftField = hasAirstrike
+        ? `<div><label>Aircraft Type / 飞机类型</label><select onchange="db.units['${id}'].aircraft_type=this.value">${aircraftOptions}</select></div>`
+        : "";
     const comp = Object.keys(db.battalions).map(b => `<div><label>${db.battalions[b].name} (${b})</label><input type="number" value="${u.composition?.[b] || 0}" onchange="setComp('${id}','${b}', n(this.value))"></div>`).join("");
+    const mountedWeapons = {};
+    for (const [battalionId, count] of Object.entries(u.composition || {})) {
+        for (const [weaponId, quantity] of Object.entries(db.battalions[battalionId]?.weapons || {})) {
+            mountedWeapons[weaponId] = (mountedWeapons[weaponId] || 0) + Number(count) * Number(quantity);
+        }
+    }
+    const weaponSummary = Object.entries(mountedWeapons).filter(([, quantity]) => quantity > 0).map(([weaponId, quantity]) => `${quantity}× ${db.weapons[weaponId]?.name || weaponId}`).join(" | ") || "Unarmed";
     return `<div class="card"><div class="card-title"><b>${esc(u.name)} <span class="pill">${id}</span></b><button class="btn danger" onclick="delete db.units['${id}']; render()">Delete</button></div>
         <div class="grid three">
             ${unitInput(id,"name",u.name,"Name / 名称")}${unitInput(id,"faction",u.faction,"Faction / 阵营")}${unitInput(id,"icon",u.icon || "","Icon text / 图标文字")}
             ${unitInput(id,"personnel",u.personnel,"Personnel / 人数","number","1")}${unitInput(id,"equipment_level",u.equipment_level,"Equipment Level / 装备水平","number","0.1")}${unitInput(id,"morale",u.morale,"Morale / 士气","number","1")}
             ${unitInput(id,"lon",u.lon,"Longitude / 经度","number","0.001")}${unitInput(id,"lat",u.lat,"Latitude / 纬度","number","0.001")}${unitInput(id,"entrenchment",u.entrenchment || 0,"Entrenchment / 工事","number","0.1")}
-            <div><label>Unit Type / 单位类型</label><select onchange="db.units['${id}'].unit_type=this.value">${typeOptions}</select></div>
-            <div><label>Primary Weapon / 主武器</label><select onchange="db.units['${id}'].primary_weapon=this.value">${weaponOptions}</select></div>
+            <div><label>Unit Type / 单位类型</label><select onchange="db.units['${id}'].unit_type=this.value; if ((db.rules.unit_types[this.value]?.capabilities || []).includes(db.rules.missions?.airstrike?.capability)) db.units['${id}'].aircraft_type = db.units['${id}'].aircraft_type || db.rules.missions.airstrike.default_aircraft_type; render();">${typeOptions}</select></div>
+            <div><label>Derived Weapon Loadout / 自动武器编成</label><div class="small">${esc(weaponSummary)}</div></div>
             <div><label>Default Stance / 默认姿态</label><select onchange="db.units['${id}'].stance=this.value">${stanceOptions}</select></div>
+            ${aircraftField}
         </div>
         <h3 class="small">Composition / 编成</h3><div class="grid three">${comp}</div>
     </div>`;
 }
 function unitInput(id, key, value, label, type="text", step="") { return `<div><label>${label}</label><input type="${type}" ${step ? `step="${step}"` : ""} value="${esc(value)}" onchange="db.units['${id}'].${key}=this.type==='number'?n(this.value):this.value"></div>`; }
-function setComp(id, b, value) { if (!db.units[id].composition) db.units[id].composition = {}; if (value > 0) db.units[id].composition[b] = value; else delete db.units[id].composition[b]; }
+function setComp(id, b, value) { if (!db.units[id].composition) db.units[id].composition = {}; if (value > 0) db.units[id].composition[b] = value; else delete db.units[id].composition[b]; delete db.units[id].primary_weapon; render(); }
 function addUnit() {
     const id = "unit_" + Date.now().toString().slice(-8);
     const battalionId = Object.keys(db.battalions)[0];
-    const weaponId = Object.keys(db.weapons)[0];
-    if (!battalionId || !weaponId) { alert("Create at least one battalion and weapon first."); return; }
+    if (!battalionId || !Object.keys(db.weapons).length) { alert("Create at least one battalion and weapon first."); return; }
     const center = db.scenario.map_center || [0, 0];
     const faction = db.scenario.committee?.delegate_roles?.[0]?.faction || "FACTION";
     const size = n(db.battalions[battalionId].size, 0);
     if (!Number.isInteger(size) || size <= 0) { alert("Set a positive whole-number battalion size before creating a unit."); return; }
     const defaults = db.rules.unit_defaults;
-    db.units[id] = {name:"New Unit", faction, icon:"", personnel:size, lon:center[1], lat:center[0], equipment_level:defaults.equipment_level, unit_type:defaults.unit_type, composition:{[battalionId]:1}, primary_weapon:weaponId, morale:defaults.morale, stance:defaults.stance, entrenchment:defaults.entrenchment};
+    db.units[id] = {name:"New Unit", faction, icon:"", personnel:size, lon:center[1], lat:center[0], equipment_level:defaults.equipment_level, unit_type:defaults.unit_type, composition:{[battalionId]:1}, morale:defaults.morale, stance:defaults.stance, entrenchment:defaults.entrenchment};
+    if ((db.rules.unit_types?.[defaults.unit_type]?.capabilities || []).includes(db.rules.missions?.airstrike?.capability)) {
+        db.units[id].aircraft_type = db.rules.missions.airstrike.default_aircraft_type;
+    }
+    render();
+}
+
+function renderInstallations() {
+    if (!Array.isArray(db.scenario.military_installations)) db.scenario.military_installations = [];
+    const typeEntries = Object.entries(db.rules?.military_installations?.types || {});
+    const typeSummary = typeEntries.length
+        ? typeEntries.map(([typeId, profile]) => `<div class="card"><b>${esc(profile.icon || "⌂")} ${esc(profile.label || typeId)} <span class="pill">${esc(typeId)}</span></b><p class="small">${esc(profile.description || "")}</p><div class="small">Build ${n(profile.construction_hours).toFixed(1)} h · Supply ${n(profile.construction_supply_cost).toFixed(1)}% · Integrity ${n(profile.max_integrity).toFixed(0)} · Fort cover +${Math.round(n(profile.fortification_cover_bonus) * 100)}% · Radar ${n(profile.radar_range_km).toFixed(0)} km</div></div>`).join("")
+        : `<div class="card" style="color:#ff7b72;">No installation types exist. Add them under Simulation Rules → Advanced rules.json.</div>`;
+    return `<div class="section"><h2>Military Targets & Construction / 军事目标与建设</h2>
+        <p class="hint">These are persistent map entities, separate from units. Scenario entries exist at the start; players can build the same DLC-defined types during the simulation. Fortify remains temporary unit fieldwork.</p>
+        <div class="toolbar"><button class="btn secondary" onclick="addInstallation()" ${typeEntries.length ? "" : "disabled"}>Add Military Target</button></div>
+        ${db.scenario.military_installations.map((site, index) => renderInstallationCard(site, index)).join("") || `<div class="card small">No starting military targets. Players may still construct configured types during play.</div>`}
+    </div><div class="section"><h2>Available DLC Types / 可用 DLC 类型</h2><p class="hint">Durability, construction cost, fort cover, radar performance, and weapon vulnerabilities are special DLC rules. Edit their exact values in the Advanced rules.json editor.</p>${typeSummary}</div>`;
+}
+
+function renderInstallationCard(site, index) {
+    const types = db.rules?.military_installations?.types || {};
+    const typeOptions = Object.entries(types).map(([typeId, profile]) => `<option value="${esc(typeId)}" ${site.type_id === typeId ? "selected" : ""}>${esc(profile.icon || "⌂")} ${esc(profile.label || typeId)}</option>`).join("");
+    const profile = types[site.type_id] || {};
+    const builderOptions = `<option value="" ${site.builder_unit_id ? "" : "selected"}>None / 无</option>` + Object.entries(db.units).map(([unitId, unit]) => `<option value="${esc(unitId)}" ${site.builder_unit_id === unitId ? "selected" : ""}>${esc(unit.name)} (${esc(unitId)})</option>`).join("");
+    return `<div class="card"><div class="card-title"><b>${esc(site.name || "Military Target")} <span class="pill">${esc(site.id || "missing-id")}</span></b><button class="btn danger" onclick="db.scenario.military_installations.splice(${index},1); render()">Delete</button></div>
+        <div class="grid three">
+            ${installationInput(index, "id", site.id, "Target ID / 目标 ID")}
+            ${installationInput(index, "name", site.name, "Name / 名称")}
+            ${installationInput(index, "faction", site.faction, "Owning Faction / 所属阵营")}
+            <div><label>Installation Type / 设施类型</label><select onchange="changeInstallationType(${index}, this.value)">${typeOptions}</select></div>
+            ${installationInput(index, "lon", site.lon, "Longitude / 经度", "number", "0.001")}
+            ${installationInput(index, "lat", site.lat, "Latitude / 纬度", "number", "0.001")}
+            ${installationInput(index, "integrity", site.integrity ?? profile.max_integrity ?? 0, `Starting Integrity / 初始完整度 (max ${n(profile.max_integrity).toFixed(0)})`, "number", "1")}
+            ${installationInput(index, "construction_progress", site.construction_progress ?? 1, "Construction Progress 0–1 / 建设进度", "number", "0.05")}
+            <div><label>Assigned Builder / 建设部队</label><select onchange="db.scenario.military_installations[${index}].builder_unit_id=this.value || null">${builderOptions}</select></div>
+        </div>
+        <p class="small">${esc(profile.description || "Unknown type")}${Number(site.construction_progress ?? 1) < 1 && !site.builder_unit_id ? " This incomplete site has no builder and will remain paused." : ""}</p>
+    </div>`;
+}
+
+function installationInput(index, key, value, label, type="text", step="") {
+    return `<div><label>${label}</label><input type="${type}" ${step ? `step="${step}"` : ""} value="${esc(value)}" onchange="db.scenario.military_installations[${index}].${key}=this.type==='number'?n(this.value):this.value"></div>`;
+}
+
+function addInstallation() {
+    if (!Array.isArray(db.scenario.military_installations)) db.scenario.military_installations = [];
+    const [typeId, profile] = Object.entries(db.rules?.military_installations?.types || {})[0] || [];
+    if (!typeId) { alert("Define at least one military installation type first."); return; }
+    const center = db.scenario.map_center || [0, 0];
+    const faction = db.scenario.committee?.delegate_roles?.[0]?.faction || Object.values(db.units)[0]?.faction || "FACTION";
+    db.scenario.military_installations.push({
+        id: "inst_" + Date.now().toString().slice(-8),
+        type_id: typeId,
+        name: `${faction} ${profile.label || typeId}`,
+        faction,
+        lon: n(center[1]),
+        lat: n(center[0]),
+        integrity: n(profile.max_integrity),
+        construction_progress: 1,
+        builder_unit_id: null,
+    });
+    render();
+}
+
+function changeInstallationType(index, typeId) {
+    const site = db.scenario.military_installations[index];
+    const previousMaximum = n(db.rules?.military_installations?.types?.[site.type_id]?.max_integrity);
+    const nextProfile = db.rules?.military_installations?.types?.[typeId];
+    site.type_id = typeId;
+    if (nextProfile && (!Number.isFinite(site.integrity) || site.integrity === previousMaximum || site.integrity > n(nextProfile.max_integrity))) {
+        site.integrity = n(nextProfile.max_integrity);
+    }
     render();
 }
 
 function renderBattalions() {
-    return `<div class="section"><h2>Battalion Types / 营种数据</h2><p class="hint">These define the building blocks chairs choose when creating units. Size is required and must be a positive whole-number personnel complement.</p><div class="toolbar"><button class="btn secondary" onclick="addBattalion()">Add Battalion Type</button></div>
+    return `<div class="section"><h2>Battalion Types / 营种数据</h2><p class="hint">Battalions provide personnel, movement, defense, and armor. Offensive power is generated only by the weapon groups mounted here; the number is an abstract weapon-group allocation per battalion.</p><div class="toolbar"><button class="btn secondary" onclick="addBattalion()">Add Battalion Type</button></div>
         ${Object.entries(db.battalions).map(([id, b]) => `<div class="card"><div class="card-title"><b>${esc(b.name)} <span class="pill">${id}</span></b><button class="btn danger" onclick="delete db.battalions['${id}']; render()">Delete</button></div><div class="grid three">
             ${batInput(id,"name",b.name,"Name / 名称")}${batInput(id,"size",b.size ?? 1000,"Personnel per Battalion / 每营人数","number","1","1")}${batInput(id,"speed",b.speed,"Speed km/h / 速度","number","0.1")}
-            ${batInput(id,"soft",b.soft,"Soft Attack / 对软目标","number","1")}${batInput(id,"hard",b.hard,"Hard Attack / 对装甲","number","1")}${batInput(id,"ap",b.ap || 0,"Armor Piercing / 穿甲","number","1")}
-            ${batInput(id,"armor",b.armor,"Armor / 装甲","number","1")}${batInput(id,"defense",b.defense,"Defense / 防御","number","1")}${batInput(id,"breakthrough",b.breakthrough || 0,"Breakthrough / 突破","number","1")}
+            ${batInput(id,"armor",b.armor,"Armor Protection / 装甲防护","number","1")}${batInput(id,"armor_generation",b.armor_generation ?? 0,"Armor Generation / 装甲代数","number","1","0")}${batInput(id,"defense",b.defense,"Defense / 防御","number","1")}
+            ${batInput(id,"breakthrough",b.breakthrough || 0,"Breakthrough / 突破","number","1")}
             ${batInput(id,"org",b.org,"Organization / 组织度","number","1")}${batInput(id,"softness",b.softness ?? 1,"Softness 0-1 / 软目标比例","number","0.1")}${batInput(id,"terrain",b.terrain,"Terrain Efficiency / 地形适应","number","0.1")}
             ${batInput(id,"recon_power",b.recon_power,"Recon Power / 侦察值","number","0.1")}${batInput(id,"movement_supply_cost",b.movement_supply_cost,"Movement Supply Cost / 机动补给消耗","number","0.01")}
             <div><label>Capabilities / 能力（comma separated）</label><input value="${esc((b.capabilities || []).join(', '))}" onchange="db.battalions['${id}'].capabilities=this.value.split(',').map(x=>x.trim()).filter(Boolean)"></div>
+        </div><h3 class="small">Mounted weapon groups per battalion / 每营武器组</h3><div class="grid three">
+            ${Object.entries(db.weapons).map(([weaponId, weapon]) => `<div><label>${esc(weapon.name || weaponId)} (${esc(weaponId)})</label><input type="number" min="0" step="0.1" value="${b.weapons?.[weaponId] || 0}" onchange="setBattalionWeapon('${id}','${weaponId}',n(this.value))"></div>`).join("")}
         </div></div>`).join("")}</div>`;
 }
 function batInput(id, key, value, label, type="text", step="", min="") { return `<div><label>${label}</label><input type="${type}" ${step ? `step="${step}"` : ""} ${min ? `min="${min}"` : ""} value="${esc(value)}" onchange="db.battalions['${id}'].${key}=this.type==='number'?n(this.value):this.value"></div>`; }
+function setBattalionWeapon(id, weaponId, value) { if (!db.battalions[id].weapons) db.battalions[id].weapons = {}; if (value > 0) db.battalions[id].weapons[weaponId] = value; else delete db.battalions[id].weapons[weaponId]; }
 function addBattalion() {
     const id = prompt("Battalion ID (letters, numbers, underscore, dash, or dot)");
     if (!id) return;
     if (!validId(id) || db.battalions[id]) { alert("Invalid or duplicate battalion ID."); return; }
-    db.battalions[id] = {name:"New Battalion", size:1000, speed:0, soft:0, hard:0, ap:0, armor:0, defense:0, breakthrough:0, org:0, softness:1, terrain:1, recon_power:0, movement_supply_cost:0, capabilities:[]};
+    const firstWeapon = Object.keys(db.weapons)[0];
+    db.battalions[id] = {name:"New Battalion", size:1000, speed:0, weapons:firstWeapon?{[firstWeapon]:1}:{}, armor:0, armor_generation:0, defense:0, breakthrough:0, org:0, softness:1, terrain:1, recon_power:0, movement_supply_cost:0, capabilities:[]};
     render();
 }
 
 function renderWeapons() {
-    return `<div class="section"><h2>Weapons / 武器射程</h2><div class="toolbar"><button class="btn secondary" onclick="addWeapon()">Add Weapon</button></div>
-        ${Object.entries(db.weapons).map(([id, w]) => `<div class="card"><div class="grid"><div><label>ID</label><input value="${esc(id)}" readonly></div><div><label>Name / 名称</label><input value="${esc(w.name)}" onchange="db.weapons['${id}'].name=this.value"></div><div><label>Range km / 射程</label><input type="number" step="0.1" value="${w.range}" onchange="db.weapons['${id}'].range=n(this.value)"></div><div><label><input type="checkbox" style="width:auto;" ${w.indirect_fire ? "checked" : ""} onchange="db.weapons['${id}'].indirect_fire=this.checked"> Indirect fire / 间接射击</label></div><button class="btn danger" onclick="delete db.weapons['${id}']; render()">Delete</button></div></div>`).join("")}</div>`;
+    return `<div class="section"><h2>Weapons / 武器数据</h2><p class="hint">A weapon owns its generation and offensive factors. Range bands must be ordered from nearest to farthest; each band gives the actual soft attack, hard attack, and penetration used at that distance.</p><div class="toolbar"><button class="btn secondary" onclick="addWeapon()">Add Weapon</button></div>
+        ${Object.entries(db.weapons).map(([id, w]) => `<div class="card"><div class="card-title"><b>${esc(w.name || id)} <span class="pill">${esc(id)}</span></b><button class="btn danger" onclick="delete db.weapons['${id}']; render()">Delete</button></div><div class="grid three"><div><label>Name / 名称</label><input value="${esc(w.name)}" onchange="db.weapons['${id}'].name=this.value"></div><div><label>Weapon Generation / 武器代数</label><input type="number" min="0" step="1" value="${w.generation ?? 0}" onchange="db.weapons['${id}'].generation=n(this.value)"></div><div><label><input type="checkbox" style="width:auto;" ${w.indirect_fire ? "checked" : ""} onchange="db.weapons['${id}'].indirect_fire=this.checked"> Indirect fire / 间接射击</label></div>
+            ${["direct_fire","bombard","airstrike"].map(role => `<div><label><input type="checkbox" style="width:auto;" ${(w.roles || []).includes(role) ? "checked" : ""} onchange="setWeaponRole('${id}','${role}',this.checked)"> ${role.replace('_',' ')}</label></div>`).join("")}
+        </div><h3 class="small">Range bands / 射程分段</h3>${(w.range_bands || []).map((band, index) => `<div class="grid three" style="margin-bottom:8px;"><div><label>Max range km</label><input type="number" min="0.01" step="0.1" value="${band.max_range_km}" onchange="db.weapons['${id}'].range_bands[${index}].max_range_km=n(this.value)"></div><div><label>Soft attack</label><input type="number" min="0" step="1" value="${band.soft_attack}" onchange="db.weapons['${id}'].range_bands[${index}].soft_attack=n(this.value)"></div><div><label>Hard attack</label><input type="number" min="0" step="1" value="${band.hard_attack}" onchange="db.weapons['${id}'].range_bands[${index}].hard_attack=n(this.value)"></div><div><label>Armor piercing</label><input type="number" min="0" step="1" value="${band.armor_piercing}" onchange="db.weapons['${id}'].range_bands[${index}].armor_piercing=n(this.value)"></div><button class="btn danger" onclick="db.weapons['${id}'].range_bands.splice(${index},1); render()">Remove Band</button></div>`).join("")}<button class="btn secondary" onclick="addRangeBand('${id}')">Add Range Band</button></div>`).join("")}</div>`;
 }
+function setWeaponRole(id, role, enabled) { const roles = new Set(db.weapons[id].roles || []); if (enabled) roles.add(role); else roles.delete(role); db.weapons[id].roles = [...roles]; }
+function addRangeBand(id) { const bands = db.weapons[id].range_bands || (db.weapons[id].range_bands = []); const last = bands[bands.length - 1]; bands.push({max_range_km:(last?.max_range_km || 0)+1, soft_attack:last?.soft_attack || 0, hard_attack:last?.hard_attack || 0, armor_piercing:last?.armor_piercing || 0}); render(); }
 function addWeapon() {
     const id = prompt("Weapon ID (letters, numbers, underscore, dash, or dot)");
     if (!id) return;
     if (!validId(id) || db.weapons[id]) { alert("Invalid or duplicate weapon ID."); return; }
-    db.weapons[id] = {name:"New Weapon", range:0, indirect_fire:false};
+    db.weapons[id] = {name:"New Weapon", generation:1, indirect_fire:false, roles:["direct_fire"], range_bands:[{max_range_km:1, soft_attack:10, hard_attack:2, armor_piercing:20}]};
     render();
 }
 
@@ -331,25 +511,94 @@ function validateDlc(showAlert=true) {
     checks.push({ok: Object.keys(db.weapons).length > 0, msg:"At least one weapon exists"});
     checks.push({ok: db.rules?.schema_version === 1, msg:"rules.json uses schema version 1"});
     checks.push({ok: !!db.rules?.unit_types?.[db.rules?.unit_defaults?.unit_type], msg:"Default unit type exists in rules"});
+    checks.push({ok: !!db.rules?.missions?.airstrike?.aircraft_types?.[db.rules?.missions?.airstrike?.default_aircraft_type], msg:"Default aircraft type exists in airstrike rules"});
+    const installationTypes = db.rules?.military_installations?.types || {};
+    checks.push({ok: db.rules?.military_installations && typeof db.rules.military_installations === "object", msg:"Military-installation construction and damage rules exist"});
+    checks.push({ok: Object.keys(installationTypes).length > 0, msg:"At least one military-installation type exists"});
+    for (const [id, profile] of Object.entries(installationTypes)) {
+        checks.push({ok: validId(id), msg:`${id} is a safe installation-type ID`});
+        checks.push({ok: !!String(profile.label || "").trim() && !!String(profile.description || "").trim() && !!String(profile.icon || "").trim(), msg:`Installation type ${id} has a label, description, and icon`});
+        checks.push({ok: [profile.max_integrity, profile.construction_hours, profile.construction_supply_cost, profile.radius_km, profile.armor, profile.softness, profile.visibility, profile.effect_radius_km, profile.fortification_cover_bonus, profile.radar_range_km, profile.radar_recon_power].every(Number.isFinite), msg:`Installation type ${id} has complete numeric construction, protection, and effect data`});
+        checks.push({ok: profile.max_integrity > 0 && profile.construction_hours > 0 && profile.construction_supply_cost >= 0 && profile.softness >= 0 && profile.softness <= 1, msg:`Installation type ${id} has valid durability, build cost, and softness`});
+    }
     checks.push({ok: !!db.doctrine?.stances?.[db.rules?.unit_defaults?.stance], msg:"Default stance exists in core doctrine"});
+    const aircraftFactorFields = [
+        "cruise_speed_multiplier", "sortie_range_multiplier", "blast_radius_multiplier",
+        "soft_target_multiplier", "hard_target_multiplier", "accuracy_multiplier", "unobserved_targeting_multiplier", "payload_multiplier",
+        "morale_shock_multiplier", "suppression_multiplier", "supply_cost_multiplier",
+        "fatigue_cost_multiplier", "aa_vulnerability_multiplier"
+    ];
+    for (const [id, profile] of Object.entries(db.rules?.missions?.airstrike?.aircraft_types || {})) {
+        checks.push({ok: !!String(profile.label || "").trim() && !!String(profile.description || "").trim() && !!String(profile.attack_profile || "").trim(), msg:`Aircraft type ${id} has a label, description, and attack profile`});
+        checks.push({ok: aircraftFactorFields.every(field => Number.isFinite(profile[field]) && profile[field] >= 0), msg:`Aircraft type ${id} has every non-negative performance factor`});
+        checks.push({ok: profile.cruise_speed_multiplier > 0 && profile.sortie_range_multiplier > 0 && profile.blast_radius_multiplier > 0, msg:`Aircraft type ${id} has positive speed, range, and effect-radius factors`});
+    }
     const bounds = db.scenario.map_config?.bounds || {};
     checks.push({ok: [bounds.min_lon,bounds.max_lon,bounds.min_lat,bounds.max_lat].every(Number.isFinite) && bounds.min_lon < bounds.max_lon && bounds.min_lat < bounds.max_lat, msg:"Map bounds are valid"});
     checks.push({ok: Array.isArray(db.scenario.map_center) && db.scenario.map_center.length === 2 && db.scenario.map_center.every(Number.isFinite), msg:"Map center is valid"});
-    for (const id of [...Object.keys(db.units), ...Object.keys(db.battalions), ...Object.keys(db.weapons)]) {
+    const cities = Array.isArray(db.scenario.cities) ? db.scenario.cities : [];
+    checks.push({ok: Array.isArray(db.scenario.cities), msg:"City influence data is a list"});
+    checks.push({ok: new Set(cities.map(city => city.id)).size === cities.length, msg:"City IDs are unique"});
+    for (const city of cities) {
+        checks.push({ok: validId(city.id), msg:`${city.id || "City"} has a safe city ID`});
+        checks.push({ok: !!String(city.name || "").trim(), msg:`${city.id || "City"} has a name`});
+        checks.push({ok: Number.isFinite(city.lon) && city.lon >= -180 && city.lon <= 180 && Number.isFinite(city.lat) && city.lat >= -90 && city.lat <= 90, msg:`${city.id || "City"} has valid coordinates`});
+        checks.push({ok: Number.isFinite(city.area_km2) && city.area_km2 >= 0, msg:`${city.id || "City"} has a non-negative area`});
+        checks.push({ok: Number.isFinite(city.influence_rate) && city.influence_rate >= 0 && city.influence_rate <= 1, msg:`${city.id || "City"} influence is between 0 and 1`});
+    }
+    const installations = Array.isArray(db.scenario.military_installations) ? db.scenario.military_installations : [];
+    checks.push({ok: Array.isArray(db.scenario.military_installations), msg:"Starting military targets are stored as a list"});
+    checks.push({ok: new Set(installations.map(site => site.id)).size === installations.length, msg:"Military-target IDs are unique"});
+    checks.push({ok: installations.every(site => !Object.hasOwn(db.units, site.id)), msg:"Military-target IDs do not conflict with unit IDs"});
+    for (const site of installations) {
+        const label = site.id || "Military target";
+        const profile = installationTypes[site.type_id];
+        checks.push({ok: validId(site.id), msg:`${label} has a safe target ID`});
+        checks.push({ok: !!String(site.name || "").trim() && !!String(site.faction || "").trim(), msg:`${label} has a name and owning faction`});
+        checks.push({ok: !!profile, msg:`${label} uses an installation type from rules.json`});
+        checks.push({ok: Number.isFinite(site.lon) && site.lon >= -180 && site.lon <= 180 && Number.isFinite(site.lat) && site.lat >= -90 && site.lat <= 90, msg:`${label} has valid coordinates`});
+        checks.push({ok: Number.isFinite(site.construction_progress) && site.construction_progress >= 0 && site.construction_progress <= 1, msg:`${label} construction progress is between 0 and 1`});
+        checks.push({ok: Number.isFinite(site.integrity) && site.integrity >= 0 && (!profile || site.integrity <= profile.max_integrity), msg:`${label} integrity is within its type maximum`});
+        checks.push({ok: !site.builder_unit_id || !!db.units[site.builder_unit_id], msg:`${label} builder is empty or references an existing unit`});
+    }
+    const politics = Array.isArray(db.scenario.province_politics) ? db.scenario.province_politics : [];
+    checks.push({ok: Array.isArray(db.scenario.province_politics), msg:"Province politics data is a list"});
+    checks.push({ok: new Set(politics.map(entry => `${entry.province}\u0000${entry.faction}`)).size === politics.length, msg:"Province-faction political records are unique"});
+    for (const entry of politics) {
+        const label = `${entry.province || "Province"} / ${entry.faction || "Faction"}`;
+        checks.push({ok: !!String(entry.province || "").trim() && !!String(entry.faction || "").trim(), msg:`${label} names a province and faction`});
+        checks.push({ok: Number.isFinite(entry.civilian_sentiment) && entry.civilian_sentiment >= -1 && entry.civilian_sentiment <= 1, msg:`${label} civilian sentiment is between -1 and 1`});
+        checks.push({ok: Number.isFinite(entry.occupation) && entry.occupation >= 0 && entry.occupation <= 1, msg:`${label} initial occupation is between 0 and 1`});
+    }
+    for (const id of [...Object.keys(db.units), ...Object.keys(db.battalions), ...Object.keys(db.weapons), ...installations.map(site => site.id)]) {
         checks.push({ok: validId(id), msg:`${id} is a safe package ID`});
     }
     for (const [id, u] of Object.entries(db.units)) {
-        checks.push({ok: !!db.weapons[u.primary_weapon], msg:`${id} uses an existing weapon`});
         checks.push({ok: Object.keys(u.composition || {}).every(k => !!db.battalions[k]), msg:`${id} composition uses existing battalion IDs`});
+        const mountedWeaponIds = new Set(Object.keys(u.composition || {}).flatMap(battalionId => Object.keys(db.battalions[battalionId]?.weapons || {})));
+        if (u.primary_weapon) checks.push({ok: mountedWeaponIds.has(u.primary_weapon), msg:`${id} highlighted weapon is mounted by its battalions`});
         checks.push({ok: Number.isFinite(u.lon) && Number.isFinite(u.lat) && Number.isFinite(u.personnel) && u.personnel >= 0, msg:`${id} has valid coordinates and personnel`});
         checks.push({ok: !!db.rules?.unit_types?.[u.unit_type], msg:`${id} uses a unit type from rules.json`});
         checks.push({ok: !!db.doctrine?.stances?.[u.stance], msg:`${id} uses a core combat stance`});
+        const hasAirstrike = (db.rules?.unit_types?.[u.unit_type]?.capabilities || []).includes(db.rules?.missions?.airstrike?.capability);
+        if (hasAirstrike) checks.push({ok: !!db.rules?.missions?.airstrike?.aircraft_types?.[u.aircraft_type], msg:`${id} uses an aircraft type from rules.json`});
     }
     for (const [id, b] of Object.entries(db.battalions)) {
+        checks.push({ok: Number.isInteger(b.armor_generation) && b.armor_generation >= 0, msg:`${id} has a separate non-negative whole-number armor generation`});
         checks.push({ok: Number.isFinite(b.recon_power) && Number.isFinite(b.movement_supply_cost) && b.movement_supply_cost >= 0, msg:`${id} has recon and movement supply data`});
+        checks.push({ok: b.weapons && typeof b.weapons === "object" && !Array.isArray(b.weapons), msg:`${id} has a weapon-group object`});
+        checks.push({ok: Object.entries(b.weapons || {}).every(([weaponId, quantity]) => !!db.weapons[weaponId] && Number.isFinite(quantity) && quantity > 0), msg:`${id} weapon groups use existing weapons and positive quantities`});
+        checks.push({ok: !["soft","hard","ap"].some(field => Object.hasOwn(b, field)), msg:`${id} stores attack and penetration in weapons, not the battalion`});
     }
+    const allowedWeaponRoles = new Set(["direct_fire", "bombard", "airstrike"]);
     for (const [id, w] of Object.entries(db.weapons)) {
+        checks.push({ok: Number.isInteger(w.generation) && w.generation >= 0, msg:`${id} has a non-negative whole-number weapon generation`});
         checks.push({ok: typeof w.indirect_fire === "boolean", msg:`${id} declares direct or indirect fire`});
+        checks.push({ok: Array.isArray(w.roles) && w.roles.length > 0 && w.roles.every(role => allowedWeaponRoles.has(role)), msg:`${id} has valid mission roles`});
+        const bands = Array.isArray(w.range_bands) ? w.range_bands : [];
+        checks.push({ok: bands.length > 0, msg:`${id} has at least one range band`});
+        checks.push({ok: bands.every((band, index) => Number.isFinite(band.max_range_km) && band.max_range_km > (index ? bands[index - 1].max_range_km : 0) && [band.soft_attack, band.hard_attack, band.armor_piercing].every(value => Number.isFinite(value) && value >= 0)), msg:`${id} range bands are ordered and contain non-negative attack data`});
+        checks.push({ok: !w.roles?.includes("bombard") || w.indirect_fire === true, msg:`${id} uses indirect fire when assigned the bombard role`});
     }
     if (showAlert) alert(checks.map(c => `${c.ok ? 'OK' : 'FIX'} - ${c.msg}`).join("\n"));
     return checks;

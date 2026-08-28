@@ -6,8 +6,7 @@
 
 # Save Files & Logs
 save_*.json
-battle_log.txt
-battle_log_*.txt
+battle_log*.txt
 dem_xray_report.png
 
 # Python Caches
@@ -18,3 +17,6 @@ __pycache__/
 
 # DLC Temp files (if any)
 dlc/**/maps/*.tif
+
+# Local campaign data
+dlc/afghan/

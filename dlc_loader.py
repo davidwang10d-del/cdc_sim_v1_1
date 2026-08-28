@@ -24,13 +24,13 @@ DLC_ROOT = PROJECT_ROOT / "dlc"
 _ID_PATTERN = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}$")
 _SUPPORTED_DIRECTIVE_EFFECTS = frozenset({"none", "morale", "supply", "fatigue", "combat_modifier", "speed_modifier"})
 _SUPPORTED_MODIFIER_TYPES = frozenset({"combat", "speed", "morale"})
-_MAP_PATH_FIELDS = {
-    "dem_file": "file",
-    "dem_dir": "dir",
-    "roads_file": "file",
-    "rivers_file": "file",
-    "provinces_file": "file",
-}
+_OPTIONAL_GIS_PATH_FIELDS = (
+    "dem_file",
+    "dem_dir",
+    "roads_file",
+    "rivers_file",
+    "provinces_file",
+)
 
 
 class DLCValidationError(ValueError):
@@ -125,6 +125,172 @@ def _finite_number(value: Any, label: str, *, minimum: float | None = None, maxi
     return number
 
 
+def _validate_cities(scenario: dict[str, Any], errors: list[str]) -> None:
+    """Normalize optional circular city areas authored by a DLC."""
+    raw_cities = scenario.get("cities", [])
+    if not isinstance(raw_cities, list):
+        errors.append("scenario.json: cities must be a list")
+        scenario["cities"] = []
+        return
+
+    cities: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+    for index, raw_city in enumerate(raw_cities):
+        label = f"scenario.json city[{index}]"
+        if not isinstance(raw_city, dict):
+            errors.append(f"{label} must be an object")
+            continue
+        try:
+            city_id = validate_identifier(raw_city.get("id"), f"{label} ID")
+            if city_id in seen_ids:
+                raise DLCValidationError(f"{label} ID [{city_id}] is duplicated")
+            name = str(raw_city.get("name", "")).strip()
+            if not name:
+                raise DLCValidationError(f"{label} requires a name")
+            city = {
+                "id": city_id,
+                "name": name[:120],
+                "description": str(raw_city.get("description", "")).strip()[:500],
+                "lon": _finite_number(raw_city.get("lon"), f"{label} longitude", minimum=-180, maximum=180),
+                "lat": _finite_number(raw_city.get("lat"), f"{label} latitude", minimum=-90, maximum=90),
+                "area_km2": _finite_number(raw_city.get("area_km2", 0), f"{label} area_km2", minimum=0),
+                "influence_rate": _finite_number(raw_city.get("influence_rate", 0), f"{label} influence_rate", minimum=0, maximum=1),
+            }
+            cities.append(city)
+            seen_ids.add(city_id)
+        except DLCValidationError as exc:
+            errors.extend(exc.errors)
+    scenario["cities"] = cities
+
+
+def _validate_province_politics(scenario: dict[str, Any], errors: list[str]) -> None:
+    """Normalize optional per-faction civilian sentiment and initial occupation."""
+    raw_entries = scenario.get("province_politics", [])
+    if not isinstance(raw_entries, list):
+        errors.append("scenario.json: province_politics must be a list")
+        scenario["province_politics"] = []
+        return
+
+    entries: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for index, raw_entry in enumerate(raw_entries):
+        label = f"scenario.json province_politics[{index}]"
+        if not isinstance(raw_entry, dict):
+            errors.append(f"{label} must be an object")
+            continue
+        province = str(raw_entry.get("province", "")).strip()
+        faction = str(raw_entry.get("faction", "")).strip()
+        if not province:
+            errors.append(f"{label} requires a province")
+            continue
+        if not faction:
+            errors.append(f"{label} requires a faction")
+            continue
+        key = (province, faction)
+        if key in seen:
+            errors.append(f"{label} duplicates province [{province}] and faction [{faction}]")
+            continue
+        try:
+            entries.append({
+                "province": province[:120],
+                "faction": faction[:120],
+                "civilian_sentiment": _finite_number(
+                    raw_entry.get("civilian_sentiment", 0),
+                    f"{label} civilian_sentiment",
+                    minimum=-1,
+                    maximum=1,
+                ),
+                "occupation": _finite_number(
+                    raw_entry.get("occupation", 0),
+                    f"{label} occupation",
+                    minimum=0,
+                    maximum=1,
+                ),
+            })
+            seen.add(key)
+        except DLCValidationError as exc:
+            errors.extend(exc.errors)
+    scenario["province_politics"] = entries
+
+
+def _validate_initial_installations(
+    scenario: dict[str, Any],
+    rules: dict[str, Any],
+    units: dict[str, Any],
+    errors: list[str],
+) -> None:
+    """Normalize persistent military targets authored into a scenario."""
+    raw_installations = scenario.get("military_installations", [])
+    if not isinstance(raw_installations, list):
+        errors.append("scenario.json: military_installations must be a list")
+        scenario["military_installations"] = []
+        return
+
+    types = rules.get("military_installations", {}).get("types", {})
+    normalized: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+    for index, raw in enumerate(raw_installations):
+        label = f"scenario.json military_installations[{index}]"
+        if not isinstance(raw, dict):
+            errors.append(f"{label} must be an object")
+            continue
+        try:
+            installation_id = validate_identifier(raw.get("id"), f"{label} ID")
+            if installation_id in seen_ids:
+                raise DLCValidationError(f"{label} ID [{installation_id}] is duplicated")
+            if installation_id in units:
+                raise DLCValidationError(f"{label} ID [{installation_id}] conflicts with a unit ID")
+            type_id = str(raw.get("type_id", ""))
+            if type_id not in types:
+                raise DLCValidationError(f"{label} references unknown type [{type_id}]")
+            profile = types[type_id]
+            if not isinstance(profile, dict):
+                raise DLCValidationError(f"{label} type [{type_id}] has an invalid rules profile")
+            name = str(raw.get("name", profile.get("label", type_id))).strip()
+            faction = str(raw.get("faction", "")).strip()
+            if not name:
+                raise DLCValidationError(f"{label} requires a name")
+            if not faction:
+                raise DLCValidationError(f"{label} requires a faction")
+            progress = _finite_number(
+                raw.get("construction_progress", 1.0),
+                f"{label} construction_progress",
+                minimum=0.0,
+                maximum=1.0,
+            )
+            maximum_integrity = _finite_number(
+                profile.get("max_integrity"),
+                f"{label} type maximum integrity",
+                minimum=0.001,
+            )
+            integrity = _finite_number(
+                raw.get("integrity", maximum_integrity),
+                f"{label} integrity",
+                minimum=0.0,
+                maximum=maximum_integrity,
+            )
+            builder_unit_id = raw.get("builder_unit_id")
+            if builder_unit_id is not None:
+                builder_unit_id = validate_identifier(builder_unit_id, f"{label} builder_unit_id")
+                if builder_unit_id not in units:
+                    raise DLCValidationError(f"{label} references missing builder unit [{builder_unit_id}]")
+            normalized.append({
+                "id": installation_id,
+                "type_id": type_id,
+                "name": name[:120],
+                "faction": faction[:120],
+                "lon": _finite_number(raw.get("lon"), f"{label} longitude", minimum=-180, maximum=180),
+                "lat": _finite_number(raw.get("lat"), f"{label} latitude", minimum=-90, maximum=90),
+                "integrity": integrity,
+                "construction_progress": progress,
+                "builder_unit_id": builder_unit_id,
+            })
+            seen_ids.add(installation_id)
+        except DLCValidationError as exc:
+            errors.extend(exc.errors)
+    scenario["military_installations"] = normalized
+
+
 def _rule_value(rules: dict[str, Any], path: str) -> Any:
     value: Any = rules
     for part in path.split("."):
@@ -147,7 +313,7 @@ def _validate_rules(rules: dict[str, Any], errors: list[str]) -> None:
         "clock", "resources", "state_limits", "unit_defaults", "footprint",
         "composition", "unit_types", "stances", "readiness", "recovery",
         "movement", "orders", "defense", "detection", "tactical_support", "political_influence",
-        "combat", "missions", "geography", "directives", "modifiers",
+        "combat", "missions", "military_installations", "geography", "directives", "modifiers",
     )
     for path in required_objects:
         try:
@@ -199,6 +365,9 @@ def _validate_rules(rules: dict[str, Any], errors: list[str]) -> None:
         "movement.terrain_fatigue_per_hour": (0.0, None),
         "movement.base_supply_per_hour": (0.0, None),
         "orders.assault_speed_multiplier": (0.001, None),
+        "orders.relocate_avoidance_margin_km": (0.0, None),
+        "orders.relocate_avoidance_cost_multiplier": (0.001, None),
+        "orders.relocate_reroute_cooldown_hours": (0.0, None),
         "defense.defend_entrenchment_multiplier": (0.0, None),
         "defense.fortify_entrenchment_per_hour": (0.0, None),
         "defense.fortify_supply_per_hour": (0.0, None),
@@ -220,11 +389,15 @@ def _validate_rules(rules: dict[str, Any], errors: list[str]) -> None:
         "tactical_support.range_km": (0.0, None),
         "tactical_support.minimum_equipment_level": (0.0, None),
         "tactical_support.equipment_multiplier": (0.0, None),
-        "political_influence.minimum": (None, None),
-        "political_influence.maximum": (None, None),
+        "political_influence.minimum": (-1.0, -1.0),
+        "political_influence.maximum": (1.0, 1.0),
         "political_influence.personnel_reference": (0.001, None),
-        "political_influence.shift_per_reference_unit_hour": (0.0, None),
-        "political_influence.default_faction_weight": (None, None),
+        "political_influence.occupation_gain_per_hour": (0.0, 1.0),
+        "political_influence.occupation_decay_per_hour": (0.0, 1.0),
+        "political_influence.control_threshold": (0.0, 1.0),
+        "political_influence.control_margin": (0.0, 1.0),
+        "political_influence.contested_threshold": (0.0, 1.0),
+        "political_influence.default_faction_weight": (0.0, None),
         "combat.cover.entrenchment_effect": (0.0, None),
         "combat.cover.entrenchment_cap": (0.0, None),
         "combat.cover.moving_modifier": (None, None),
@@ -241,7 +414,6 @@ def _validate_rules(rules: dict[str, Any], errors: list[str]) -> None:
         "combat.direct.frontage_minimum_personnel": (0.0, None),
         "combat.direct.frontage_maximum_personnel": (0.0, None),
         "combat.direct.frontage_terrain_reduction": (0.0, None),
-        "combat.direct.personnel_reference": (0.001, None),
         "combat.direct.elevation_advantage_threshold_m": (0.0, None),
         "combat.direct.elevation_advantage_multiplier": (0.0, None),
         "combat.direct.failed_penetration_multiplier": (0.0, None),
@@ -255,15 +427,6 @@ def _validate_rules(rules: dict[str, Any], errors: list[str]) -> None:
         "combat.direct.suppression_cap": (0.0, None),
         "combat.direct.suppression_attack_multiplier": (0.0, None),
         "combat.direct.unopposed_log_probability_per_hour": (0.0, None),
-        "combat.evasion.trigger_range_fraction": (0.0, None),
-        "combat.evasion.retreat_min_km": (0.0, None),
-        "combat.evasion.retreat_max_km": (0.0, None),
-        "combat.evasion.log_probability_per_hour": (0.0, None),
-        "combat.routing.morale_threshold": (0.0, None),
-        "combat.routing.speed_multiplier": (0.0, None),
-        "combat.routing.rally_morale": (0.0, None),
-        "combat.routing.retreat_min_km": (0.0, None),
-        "combat.routing.retreat_max_km": (0.0, None),
         "missions.bombard.duration_hours": (0.0, None),
         "missions.bombard.fatigue_per_hour": (0.0, None),
         "missions.bombard.supply_per_hour": (0.0, None),
@@ -271,14 +434,19 @@ def _validate_rules(rules: dict[str, Any], errors: list[str]) -> None:
         "missions.bombard.stop_supply_threshold": (0.0, None),
         "missions.bombard.blast_radius_km": (0.001, None),
         "missions.bombard.minimum_aim_factor": (0.0, 1.0),
+        "missions.bombard.unobserved_accuracy_multiplier": (0.0, 1.0),
         "missions.bombard.terrain_efficiency_multiplier": (0.0, None),
         "missions.bombard.casualty_coefficient": (0.0, None),
         "missions.bombard.organization_base_per_hour": (0.0, None),
         "missions.bombard.organization_casualty_multiplier": (0.0, None),
         "missions.bombard.suppression_per_hour": (0.0, None),
+        "missions.airstrike.sortie_range_km": (0.001, None),
         "missions.airstrike.blast_radius_km": (0.001, None),
         "missions.airstrike.minimum_aim_factor": (0.0, 1.0),
-        "missions.airstrike.casualty_coefficient": (0.0, None),
+        "missions.airstrike.unobserved_accuracy_multiplier": (0.0, 1.0),
+        "missions.airstrike.strike_power_reference": (0.001, None),
+        "missions.airstrike.casualty_coefficient": (0.0, 1.0),
+        "missions.airstrike.maximum_casualty_fraction": (0.0, 1.0),
         "missions.airstrike.organization_base": (0.0, None),
         "missions.airstrike.organization_casualty_multiplier": (0.0, None),
         "missions.airstrike.suppression": (0.0, None),
@@ -287,6 +455,17 @@ def _validate_rules(rules: dict[str, Any], errors: list[str]) -> None:
         "missions.air_defense.range_km": (0.0, None),
         "missions.air_defense.minimum_equipment_level": (0.0, None),
         "missions.air_defense.kill_probability_per_hour": (0.0, None),
+        "military_installations.construction.work_radius_km": (0.0, None),
+        "military_installations.construction.minimum_supply_to_start": (0.0, None),
+        "military_installations.construction.stop_supply_threshold": (0.0, None),
+        "military_installations.construction.fatigue_per_hour": (0.0, None),
+        "military_installations.construction.suppression_build_penalty": (0.0, 1.0),
+        "military_installations.construction.minimum_separation_km": (0.0, None),
+        "military_installations.damage.direct_integrity_coefficient": (0.0, None),
+        "military_installations.damage.bombard_integrity_coefficient": (0.0, None),
+        "military_installations.damage.airstrike_integrity_coefficient": (0.0, None),
+        "military_installations.damage.terrain_cover_effect": (0.0, None),
+        "military_installations.damage.terrain_cover_cap": (0.0, 1.0),
         "geography.line_of_sight.automatic_clear_distance_km": (0.0, None),
         "geography.line_of_sight.observer_height_m": (0.0, None),
         "geography.line_of_sight.effective_earth_radius_km": (0.001, None),
@@ -313,6 +492,7 @@ def _validate_rules(rules: dict[str, Any], errors: list[str]) -> None:
         "combat.direct.river_probe_steps": 2,
         "geography.void_search_radius_pixels": 1,
         "movement.max_route_waypoints": 1,
+        "military_installations.construction.maximum_projects_per_builder": 1,
     }
     for path, minimum in integer_rules.items():
         try:
@@ -327,8 +507,9 @@ def _validate_rules(rules: dict[str, Any], errors: list[str]) -> None:
         "unit_defaults.modifier_name", "tactical_support.capability",
         "orders.default_role", "orders.arrival_role", "orders.defending_status",
         "orders.fortifying_status", "orders.fortify_completion_role",
-        "combat.direct.river_engineer_capability", "combat.routing.stance",
+        "combat.direct.river_engineer_capability",
         "missions.bombard.capability", "missions.airstrike.capability",
+        "missions.airstrike.default_aircraft_type",
         "missions.air_defense.capability", "directives.default_title",
         "directives.default_faction", "modifiers.default_name",
         "geography.pathing.heavy_river_crossing_capability",
@@ -341,10 +522,128 @@ def _validate_rules(rules: dict[str, Any], errors: list[str]) -> None:
         except DLCValidationError as exc:
             errors.extend(exc.errors)
 
+    installation_rules = rules.get("military_installations", {})
+    construction_rules = installation_rules.get("construction", {}) if isinstance(installation_rules, dict) else {}
+    damage_rules = installation_rules.get("damage", {}) if isinstance(installation_rules, dict) else {}
+    installation_types = installation_rules.get("types", {}) if isinstance(installation_rules, dict) else {}
+    if not isinstance(construction_rules, dict):
+        errors.append("military_installations.construction must be an object")
+    if not isinstance(damage_rules, dict):
+        errors.append("military_installations.damage must be an object")
+    if not isinstance(installation_types, dict) or not installation_types:
+        errors.append("military_installations.types must define at least one installation type")
+        installation_types = {}
+    if len({type_id.casefold() for type_id in installation_types if isinstance(type_id, str)}) != len(installation_types):
+        errors.append("Military installation type IDs must be unique ignoring case")
+    installation_number_fields = {
+        "max_integrity": (0.001, None),
+        "construction_hours": (0.001, None),
+        "construction_supply_cost": (0.0, None),
+        "radius_km": (0.0, None),
+        "armor": (0.0, None),
+        "softness": (0.0, 1.0),
+        "visibility": (0.0, None),
+        "direct_damage_multiplier": (0.0, None),
+        "bombard_damage_multiplier": (0.0, None),
+        "airstrike_damage_multiplier": (0.0, None),
+        "fortification_cover_bonus": (0.0, 1.0),
+        "effect_radius_km": (0.0, None),
+        "radar_range_km": (0.0, None),
+        "radar_recon_power": (0.0, None),
+        "radar_detection_probability_per_hour": (0.0, 1.0),
+    }
+    for type_id, profile in installation_types.items():
+        try:
+            validate_identifier(type_id, "Military installation type ID")
+        except DLCValidationError as exc:
+            errors.extend(exc.errors)
+        if not isinstance(profile, dict):
+            errors.append(f"Military installation type [{type_id}] must be an object")
+            continue
+        for field in ("label", "description", "icon"):
+            if not isinstance(profile.get(field), str) or not profile[field].strip():
+                errors.append(f"Military installation type [{type_id}] requires {field}")
+        builder_capability = profile.get("builder_capability", "")
+        if not isinstance(builder_capability, str):
+            errors.append(f"Military installation type [{type_id}] builder_capability must be a string")
+        if not isinstance(profile.get("radar_requires_line_of_sight"), bool):
+            errors.append(
+                f"Military installation type [{type_id}] radar_requires_line_of_sight must be true or false"
+            )
+        for field, (minimum, maximum) in installation_number_fields.items():
+            try:
+                _finite_number(
+                    profile.get(field),
+                    f"Military installation type [{type_id}] {field}",
+                    minimum=minimum,
+                    maximum=maximum,
+                )
+            except DLCValidationError as exc:
+                errors.extend(exc.errors)
+        try:
+            cover_bonus = float(profile.get("fortification_cover_bonus", 0) or 0)
+            effect_radius = float(profile.get("effect_radius_km", 0) or 0)
+            radar_range = float(profile.get("radar_range_km", 0) or 0)
+            radar_power = float(profile.get("radar_recon_power", 0) or 0)
+            radar_probability = float(profile.get("radar_detection_probability_per_hour", 0) or 0)
+        except (TypeError, ValueError):
+            cover_bonus = effect_radius = radar_range = radar_power = radar_probability = 0.0
+        if cover_bonus > 0 and effect_radius <= 0:
+            errors.append(
+                f"Military installation type [{type_id}] with fortification cover requires a positive effect_radius_km"
+            )
+        if radar_range > 0:
+            if radar_power <= 0:
+                errors.append(f"Military installation type [{type_id}] radar_recon_power must be positive when radar is enabled")
+            if radar_probability <= 0:
+                errors.append(
+                    f"Military installation type [{type_id}] radar detection probability must be positive when radar is enabled"
+                )
+
+    airstrike_rules = rules.get("missions", {}).get("airstrike", {}) if isinstance(rules.get("missions"), dict) else {}
+    aircraft_types = airstrike_rules.get("aircraft_types", {}) if isinstance(airstrike_rules, dict) else {}
+    if not isinstance(aircraft_types, dict) or not aircraft_types:
+        errors.append("missions.airstrike.aircraft_types must define at least one aircraft type")
+        aircraft_types = {}
+    if len({profile_id.casefold() for profile_id in aircraft_types if isinstance(profile_id, str)}) != len(aircraft_types):
+        errors.append("Aircraft type IDs must be unique ignoring case")
+    aircraft_factor_fields = (
+        "cruise_speed_multiplier", "sortie_range_multiplier", "blast_radius_multiplier",
+        "soft_target_multiplier", "hard_target_multiplier", "accuracy_multiplier",
+        "unobserved_targeting_multiplier",
+        "payload_multiplier", "morale_shock_multiplier", "suppression_multiplier",
+        "supply_cost_multiplier", "fatigue_cost_multiplier", "aa_vulnerability_multiplier",
+    )
+    for profile_id, profile in aircraft_types.items():
+        try:
+            validate_identifier(profile_id, "Aircraft type ID")
+        except DLCValidationError as exc:
+            errors.extend(exc.errors)
+        if not isinstance(profile, dict):
+            errors.append(f"Aircraft type [{profile_id}] must be an object")
+            continue
+        for field in ("label", "description", "attack_profile"):
+            if not isinstance(profile.get(field), str) or not profile.get(field).strip():
+                errors.append(f"Aircraft type [{profile_id}] requires {field}")
+        for field in aircraft_factor_fields:
+            try:
+                minimum = 0.001 if field in {
+                    "cruise_speed_multiplier", "sortie_range_multiplier", "blast_radius_multiplier"
+                } else 0.0
+                _finite_number(profile.get(field), f"Aircraft type [{profile_id}] {field}", minimum=minimum)
+            except DLCValidationError as exc:
+                errors.extend(exc.errors)
+    default_aircraft_type = airstrike_rules.get("default_aircraft_type") if isinstance(airstrike_rules, dict) else None
+    if isinstance(default_aircraft_type, str) and aircraft_types and not any(
+        profile_id.casefold() == default_aircraft_type.casefold() for profile_id in aircraft_types
+    ):
+        errors.append("missions.airstrike.default_aircraft_type must reference missions.airstrike.aircraft_types")
+
     for path in (
-        "political_influence.enabled", "combat.routing.can_deal_damage",
+        "political_influence.enabled",
         "orders.assault_halts_at_contact", "orders.close_contact_self_defense",
         "orders.relocate_allows_stance_fire", "orders.route_allows_stance_fire",
+        "orders.relocate_avoids_detected_contact",
     ):
         try:
             if not isinstance(_rule_value(rules, path), bool):
@@ -391,8 +690,8 @@ def _validate_rules(rules: dict[str, Any], errors: list[str]) -> None:
     if len({type_id.casefold() for type_id in unit_types if isinstance(type_id, str)}) != len(unit_types):
         errors.append("rules.json unit type IDs must be unique ignoring case")
     fixed_stat_fields = (
-        "speed_kmh", "soft_attack", "hard_attack", "defense", "breakthrough",
-        "organization", "armor_piercing", "armor", "softness", "terrain_modifier",
+        "speed_kmh", "defense", "breakthrough", "organization",
+        "armor", "softness", "terrain_modifier",
     )
     for type_id, profile in unit_types.items():
         try:
@@ -492,7 +791,7 @@ def _validate_rules(rules: dict[str, Any], errors: list[str]) -> None:
                 _finite_number(profile.get(field), f"Stance [{stance_id}] {field}", minimum=None if field == "base_cover" else 0.0)
             except DLCValidationError as exc:
                 errors.extend(exc.errors)
-        for field in ("allows_ranged_fire", "auto_evasion", "conceals_border_crossing"):
+        for field in ("allows_ranged_fire", "conceals_border_crossing"):
             if not isinstance(profile.get(field), bool):
                 errors.append(f"Stance [{stance_id}] {field} must be true or false")
 
@@ -502,9 +801,6 @@ def _validate_rules(rules: dict[str, Any], errors: list[str]) -> None:
             errors.append("unit_defaults.unit_type must reference rules.json unit_types")
         if not any(stance_id.casefold() == str(defaults.get("stance", "")).casefold() for stance_id in stances):
             errors.append("unit_defaults.stance must reference a core doctrine stance")
-    routing = rules.get("combat", {}).get("routing", {}) if isinstance(rules.get("combat"), dict) else {}
-    if isinstance(routing, dict) and not any(stance_id.casefold() == str(routing.get("stance", "")).casefold() for stance_id in stances):
-        errors.append("combat.routing.stance must reference a core doctrine stance")
     political = rules.get("political_influence", {})
     if isinstance(political, dict):
         for field in ("excluded_statuses", "excluded_province_names", "excluded_province_prefixes"):
@@ -519,7 +815,7 @@ def _validate_rules(rules: dict[str, Any], errors: list[str]) -> None:
                 if not isinstance(faction, str) or not faction.strip():
                     errors.append("political influence faction names must be non-empty strings")
                 try:
-                    _finite_number(weight, f"Political influence weight [{faction}]")
+                    _finite_number(weight, f"Political influence weight [{faction}]", minimum=0.0)
                 except DLCValidationError as exc:
                     errors.extend(exc.errors)
 
@@ -561,8 +857,6 @@ def _validate_rules(rules: dict[str, Any], errors: list[str]) -> None:
         ("political_influence.minimum", "political_influence.maximum"),
         ("combat.cover.cover_minimum", "combat.cover.cover_maximum"),
         ("combat.cover.damage_multiplier_minimum", "combat.cover.damage_multiplier_maximum"),
-        ("combat.evasion.retreat_min_km", "combat.evasion.retreat_max_km"),
-        ("combat.routing.retreat_min_km", "combat.routing.retreat_max_km"),
         ("modifiers.value_minimum", "modifiers.value_maximum"),
         ("modifiers.duration_minimum_hours", "modifiers.duration_maximum_hours"),
     )
@@ -581,12 +875,12 @@ def _validate_rules(rules: dict[str, Any], errors: list[str]) -> None:
         ("unit_defaults.supply", "resources.minimum", "resources.maximum"),
         ("unit_defaults.fatigue", "resources.minimum", "resources.maximum"),
         ("unit_defaults.suppression", "resources.minimum", "resources.maximum"),
-        ("combat.routing.morale_threshold", "resources.minimum", "resources.maximum"),
-        ("combat.routing.rally_morale", "resources.minimum", "resources.maximum"),
         ("missions.bombard.minimum_supply_to_start", "resources.minimum", "resources.maximum"),
         ("missions.bombard.stop_supply_threshold", "resources.minimum", "resources.maximum"),
         ("defense.minimum_supply_to_start", "resources.minimum", "resources.maximum"),
         ("defense.stop_supply_threshold", "resources.minimum", "resources.maximum"),
+        ("military_installations.construction.minimum_supply_to_start", "resources.minimum", "resources.maximum"),
+        ("military_installations.construction.stop_supply_threshold", "resources.minimum", "resources.maximum"),
     )
     for value_path, lower_path, upper_path in bounded_values:
         try:
@@ -605,6 +899,13 @@ def _validate_rules(rules: dict[str, Any], errors: list[str]) -> None:
     try:
         if float(_rule_value(rules, "defense.stop_supply_threshold")) > float(_rule_value(rules, "defense.minimum_supply_to_start")):
             errors.append("defense.stop_supply_threshold must not exceed defense.minimum_supply_to_start")
+    except (DLCValidationError, TypeError, ValueError):
+        pass
+    try:
+        if float(_rule_value(rules, "military_installations.construction.stop_supply_threshold")) > float(_rule_value(rules, "military_installations.construction.minimum_supply_to_start")):
+            errors.append(
+                "military_installations.construction.stop_supply_threshold must not exceed minimum_supply_to_start"
+            )
     except (DLCValidationError, TypeError, ValueError):
         pass
 
@@ -659,13 +960,16 @@ def _validate_map_config(directory: Path, scenario: dict[str, Any], errors: list
         if len(parsed_resolution) == 2:
             config["grid_resolution"] = parsed_resolution
 
-    for key, expected in _MAP_PATH_FIELDS.items():
+    for key in _OPTIONAL_GIS_PATH_FIELDS:
         raw_path = config.get(key)
         if raw_path in (None, ""):
             config[key] = ""
             continue
         try:
-            config[key] = str(_safe_child(directory, raw_path, f"map_config.{key}", expected))
+            # GIS packages are optional at runtime. Resolve their intended path
+            # securely, but let the map engine select its documented default if
+            # a chair has not installed the large file or directory.
+            config[key] = str(_safe_child(directory, raw_path, f"map_config.{key}"))
         except DLCValidationError as exc:
             errors.extend(exc.errors)
 
@@ -744,6 +1048,7 @@ def _validate_map_config(directory: Path, scenario: dict[str, Any], errors: list
 def _validate_registries(
     weapons: dict[str, Any], battalions: dict[str, Any], errors: list[str]
 ) -> None:
+    allowed_weapon_roles = {"direct_fire", "bombard", "airstrike"}
     if not weapons:
         errors.append("weapons.json must define at least one weapon")
     for weapon_id, weapon in weapons.items():
@@ -757,16 +1062,67 @@ def _validate_registries(
         if not str(weapon.get("name", "")).strip():
             errors.append(f"Weapon [{weapon_id}] requires a name")
         try:
-            _finite_number(weapon.get("range"), f"Weapon [{weapon_id}] range", minimum=0)
+            generation = _finite_number(
+                weapon.get("generation"),
+                f"Weapon [{weapon_id}] generation",
+                minimum=0,
+            )
+            if not generation.is_integer():
+                errors.append(f"Weapon [{weapon_id}] generation must be an integer")
         except DLCValidationError as exc:
             errors.extend(exc.errors)
         if not isinstance(weapon.get("indirect_fire"), bool):
             errors.append(f"Weapon [{weapon_id}] indirect_fire must be true or false")
+        roles = weapon.get("roles")
+        if not isinstance(roles, list) or not roles:
+            errors.append(f"Weapon [{weapon_id}] roles must be a non-empty list")
+            roles = []
+        elif not all(isinstance(role, str) and role in allowed_weapon_roles for role in roles):
+            errors.append(
+                f"Weapon [{weapon_id}] roles may contain only: "
+                + ", ".join(sorted(allowed_weapon_roles))
+            )
+        elif len(set(roles)) != len(roles):
+            errors.append(f"Weapon [{weapon_id}] roles must not contain duplicates")
+        if "bombard" in roles and weapon.get("indirect_fire") is not True:
+            errors.append(f"Weapon [{weapon_id}] with the bombard role must use indirect_fire true")
+
+        bands = weapon.get("range_bands")
+        if not isinstance(bands, list) or not bands:
+            errors.append(f"Weapon [{weapon_id}] range_bands must be a non-empty list")
+            continue
+        previous_range = 0.0
+        has_attack = False
+        for index, band in enumerate(bands):
+            label = f"Weapon [{weapon_id}] range_bands[{index}]"
+            if not isinstance(band, dict):
+                errors.append(f"{label} must be an object")
+                continue
+            try:
+                maximum_range = _finite_number(
+                    band.get("max_range_km"),
+                    f"{label}.max_range_km",
+                    minimum=0.0,
+                )
+                if maximum_range <= previous_range:
+                    errors.append(f"{label}.max_range_km must be greater than the previous range")
+                previous_range = maximum_range
+            except DLCValidationError as exc:
+                errors.extend(exc.errors)
+            for field in ("soft_attack", "hard_attack", "armor_piercing"):
+                try:
+                    value = _finite_number(band.get(field), f"{label}.{field}", minimum=0.0)
+                    if field in {"soft_attack", "hard_attack"} and value > 0:
+                        has_attack = True
+                except DLCValidationError as exc:
+                    errors.extend(exc.errors)
+        if not has_attack:
+            errors.append(f"Weapon [{weapon_id}] must generate attack in at least one range band")
 
     if not battalions:
         errors.append("battalions.json must define at least one battalion type")
     numeric_fields = (
-        "speed", "soft", "hard", "ap", "armor", "defense", "breakthrough",
+        "speed", "armor", "defense", "breakthrough",
         "org", "terrain", "recon_power", "movement_supply_cost",
     )
     for battalion_id, battalion in battalions.items():
@@ -779,6 +1135,12 @@ def _validate_registries(
             continue
         if not str(battalion.get("name", "")).strip():
             errors.append(f"Battalion [{battalion_id}] requires a name")
+        legacy_attack_fields = sorted({"soft", "hard", "ap"}.intersection(battalion))
+        if legacy_attack_fields:
+            errors.append(
+                f"Battalion [{battalion_id}] attack fields must move into weapon range_bands: "
+                + ", ".join(legacy_attack_fields)
+            )
         for field in numeric_fields:
             try:
                 minimum = None if field == "recon_power" else 0
@@ -792,9 +1154,38 @@ def _validate_registries(
         except DLCValidationError as exc:
             errors.extend(exc.errors)
         try:
+            armor_generation = _finite_number(
+                battalion.get("armor_generation"),
+                f"Battalion [{battalion_id}] armor_generation",
+                minimum=0.0,
+            )
+            if not armor_generation.is_integer():
+                errors.append(f"Battalion [{battalion_id}] armor_generation must be an integer")
+        except DLCValidationError as exc:
+            errors.extend(exc.errors)
+        try:
             _finite_number(battalion.get("softness"), f"Battalion [{battalion_id}] softness", minimum=0, maximum=1)
         except DLCValidationError as exc:
             errors.extend(exc.errors)
+        loadout = battalion.get("weapons")
+        if not isinstance(loadout, dict):
+            errors.append(f"Battalion [{battalion_id}] weapons must be an object")
+        else:
+            for weapon_id, quantity in loadout.items():
+                if weapon_id not in weapons:
+                    errors.append(f"Battalion [{battalion_id}] references missing weapon [{weapon_id}]")
+                try:
+                    amount = _finite_number(
+                        quantity,
+                        f"Battalion [{battalion_id}] weapon quantity [{weapon_id}]",
+                        minimum=0.0,
+                    )
+                    if amount <= 0:
+                        errors.append(
+                            f"Battalion [{battalion_id}] weapon quantity [{weapon_id}] must be greater than 0"
+                        )
+                except DLCValidationError as exc:
+                    errors.extend(exc.errors)
         capabilities = battalion.get("capabilities", [])
         if not isinstance(capabilities, list) or not all(isinstance(item, str) and item.strip() for item in capabilities):
             errors.append(f"Battalion [{battalion_id}] capabilities must be a list of non-empty strings")
@@ -846,7 +1237,7 @@ def _validate_units(
             errors.append(f"Unit [{unit_id}] capabilities must be a list of non-empty strings")
 
         weapon_id = unit.get("primary_weapon")
-        if weapon_id not in weapons:
+        if weapon_id is not None and weapon_id not in weapons:
             errors.append(f"Unit [{unit_id}] references missing weapon [{weapon_id}]")
         composition = unit.get("composition", {})
         if not isinstance(composition, dict):
@@ -859,6 +1250,48 @@ def _validate_units(
                 _finite_number(count, f"Unit [{unit_id}] battalion count [{battalion_id}]", minimum=0)
             except DLCValidationError as exc:
                 errors.extend(exc.errors)
+
+        airstrike_rules = rules.get("missions", {}).get("airstrike", {})
+        aircraft_types = airstrike_rules.get("aircraft_types", {}) if isinstance(airstrike_rules, dict) else {}
+        airstrike_capability = airstrike_rules.get("capability") if isinstance(airstrike_rules, dict) else None
+        type_profile = next(
+            (
+                profile
+                for type_id, profile in unit_types.items()
+                if type_id.casefold() == unit_type.casefold() and isinstance(profile, dict)
+            ),
+            {},
+        )
+        effective_capabilities = set(capabilities if isinstance(capabilities, list) else [])
+        effective_capabilities.update(type_profile.get("capabilities", []))
+        loadout_weapon_ids: set[str] = set()
+        for battalion_id, count in composition.items():
+            if battalion_id in battalions and isinstance(count, (int, float)) and not isinstance(count, bool) and count > 0:
+                effective_capabilities.update(battalions[battalion_id].get("capabilities", []))
+                loadout_weapon_ids.update(battalions[battalion_id].get("weapons", {}))
+        if weapon_id is not None and weapon_id in weapons and weapon_id not in loadout_weapon_ids:
+            errors.append(
+                f"Unit [{unit_id}] primary_weapon [{weapon_id}] is not mounted by its battalion composition"
+            )
+        loadout_roles = {
+            role
+            for loadout_weapon_id in loadout_weapon_ids
+            if loadout_weapon_id in weapons
+            for role in weapons[loadout_weapon_id].get("roles", [])
+        }
+        aircraft_type = unit.get("aircraft_type")
+        if airstrike_capability in effective_capabilities and not (isinstance(aircraft_type, str) and aircraft_type.strip()):
+            errors.append(f"Unit [{unit_id}] with airstrike capability requires aircraft_type")
+        if airstrike_capability in effective_capabilities and "airstrike" not in loadout_roles:
+            errors.append(f"Unit [{unit_id}] with airstrike capability requires an airstrike-role weapon in its battalions")
+        bombard_capability = rules.get("missions", {}).get("bombard", {}).get("capability")
+        if bombard_capability in effective_capabilities and "bombard" not in loadout_roles:
+            errors.append(f"Unit [{unit_id}] with bombard capability requires a bombard-role weapon in its battalions")
+        if aircraft_type is not None and not (
+            isinstance(aircraft_type, str)
+            and any(profile_id.casefold() == aircraft_type.casefold() for profile_id in aircraft_types)
+        ):
+            errors.append(f"Unit [{unit_id}] references unknown aircraft type [{aircraft_type}]")
 
 
 def load_dlc_package(dlc_id: Any) -> DLCPackage:
@@ -875,6 +1308,8 @@ def load_dlc_package(dlc_id: Any) -> DLCPackage:
     if not isinstance(scenario.get("diplomacy_blocs"), list):
         errors.append("scenario.json diplomacy_blocs must be a list")
 
+    _validate_cities(scenario, errors)
+    _validate_province_politics(scenario, errors)
     map_config = _validate_map_config(directory, scenario, errors)
     rules_file = scenario.get("simulation_rules_file")
     try:
@@ -903,6 +1338,7 @@ def load_dlc_package(dlc_id: Any) -> DLCPackage:
         errors.extend(exc.errors)
         units = {}
     _validate_units(units, weapons, battalions, rules, errors)
+    _validate_initial_installations(scenario, rules, units, errors)
 
     if errors:
         raise DLCValidationError(errors)

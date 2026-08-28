@@ -55,13 +55,25 @@
     <h2>3. Operational Orders</h2>
     <ul>
         <li><code>Hold</code>: stop and keep the current combat stance.</li>
-        <li><code>Relocate</code>: move directly without starting ranged combat; the unit still defends itself at close contact.</li>
-        <li><code>Planned Route</code>: click several waypoints, then authorize once. The unit holds ranged fire while moving.</li>
-        <li><code>Assault</code>: advance more slowly, stop at detected enemy contact, fight, and resume if contact clears.</li>
+        <li><code>Relocate</code>: move to one destination without starting ranged combat. If a detected hostile threatens the remaining path, the unit automatically detours while keeping that destination; it still defends itself at close contact.</li>
+        <li><code>Planned Route</code>: click several waypoints, then authorize once. The unit holds ranged fire while moving and keeps the chair-selected route instead of automatically replacing it.</li>
+        <li><code>Assault</code>: advance more slowly, fight while closing through ranged contact, and stop only when a detected hostile blocks the advance at close ground contact.</li>
         <li><code>Defend Here</code>: stop, recover, and dig in while retaining the selected stance.</li>
         <li><code>Fortify</code>: build fieldworks faster by spending supply and gaining fatigue, then automatically defend.</li>
     </ul>
     <p>The combined <b>Operational Order</b> panel contains two independent choices. <b>Task</b> says what the unit should do and where. <b>Combat Stance</b> controls fire discipline, speed, concealment, recon, and combat modifiers. Changing either keeps the other. Relocate and Planned Route always withhold ranged fire; close-contact self-defense remains active. Defend and Fortify build fieldworks in any stance.</p>
+
+    <h2>Military Installations</h2>
+    <p><b>Fortify is temporary unit fieldwork; Military Construction creates a persistent, separately targetable site.</b> Stop and select a ground-combat unit, scroll to <code>Military Construction</code>, choose a Fortification or Radar Site, and click <code>Build at Current Position</code>. Press Play to advance work. The builder must remain nearby; construction uses supply, adds fatigue, and slows under suppression. Hold or movement pauses the project, and the same builder can resume it later.</p>
+    <p>An operational fort gives nearby allies extra cover. An operational radar creates probability-based contacts inside its DLC range. To attack an enemy site, select a capable unit, choose Assault, Bombard Area, or Airstrike, and click the site's diamond symbol while the targeting prompt is active. Destroyed sites lose their effects but remain as wrecks. Construction, integrity, and destruction are included only in manual checkpoints.</p>
+
+    <h2>City Influence</h2>
+    <p>City areas are circular and use an influence rate from <code>0</code> to <code>1</code>. Zero has no mechanical effect; one represents maximum New York-scale urban complexity. An army inside a city is affected through terrain efficiency, cover, frontage, concealment, movement, and fatigue. If city areas overlap, the strongest rate applies.</p>
+    <p>During a session, click <code>Zeus</code> and use <code>City influence areas</code> to add, edit, or delete a city. Changes apply immediately. Save a manual checkpoint if the change must survive a restart.</p>
+
+    <h2>Province Politics And Civilian Sentiment</h2>
+    <p>Political state is stored separately for every faction in every province. Civilian sentiment uses <code>-1</code> for maximum opposition, <code>0</code> for neutral or indifferent (the default), and <code>+1</code> for maximum support. Military presence gradually changes occupation from <code>0</code> to <code>1</code>. Hostile factions with meaningful presence or occupation make control contested; allied factions do not contest one another.</p>
+    <p>Open <code>Zeus</code> and use <code>Province politics and civilian sentiment</code> to change sentiment or occupation during combat. Province map colors show the controller's faction color; contested provinces appear amber. Hover over a province to see every faction's sentiment, occupation, and influence.</p>
 
     <h2>4. How To Adjudicate A Directive</h2>
     <ol>
@@ -100,7 +112,7 @@
     <div class="box warn"><b>There is no autosave.</b> Commands, chair edits, and resets remain only in memory until you explicitly save a checkpoint.</div>
     <ol>
         <li>Save before every major crisis update: click <code>Saves</code>, then click <code>Save here</code> on an empty checkpoint or <code>Overwrite</code> on an existing one.</li>
-        <li>Each checkpoint shows its save date, simulation time, unit count, and whether it is compatible with the mounted DLC.</li>
+        <li>Each checkpoint shows its save date, simulation time, unit/site counts, and whether it is compatible with the mounted DLC.</li>
         <li>If something goes wrong, click <code>Restore</code> on the last good checkpoint. Confirming replaces the current state and leaves the simulation paused.</li>
         <li>To return to the original scenario, click <code>Reset scenario</code>. This does not create a backup.</li>
         <li>To export a summary, click <code>MUN</code>, then <code>Export SITREP</code>. A Markdown file downloads.</li>
@@ -109,9 +121,13 @@
     <h2>7. Build Your Own DLC</h2>
     <ol>
         <li>Click <code>Editor</code> on the main dashboard.</li>
-        <li>Fill the tabs from left to right: Scenario & Map, Simulation Rules, Committee, Diplomacy, Units, Battalion Types, Weapons, Export.</li>
-        <li>Use <code>Battalion Types</code> to create infantry, armor, artillery, militia, engineers, special forces, or custom unit building blocks.</li>
+        <li>Fill the tabs from left to right: Scenario & Map, Simulation Rules, Committee, Diplomacy, Units, Battalion Types, Weapons, Military Targets, Export.</li>
+        <li>Use <code>Battalion Types</code> to create unit building blocks, record armor protection and armor generation separately, and assign each battalion its weapon-group quantities.</li>
+        <li>Use <code>Weapons</code> to define weapon generation, direct-fire/bombard/airstrike roles, and near-to-far range bands with soft attack, hard attack, and armor piercing.</li>
+        <li>In <code>Scenario &amp; Map</code>, use <code>City Influence Areas</code> to set each city's information, center, area in km², and default 0–1 influence rate.</li>
+        <li>In <code>Province Politics</code>, add a separate civilian sentiment and initial occupation record for each province-faction pair that should not use the neutral defaults.</li>
         <li>Use <code>Simulation Rules</code> for battle-specific unit types, capabilities, and tuning. Tactical orders and combat stances are shared core doctrine and appear read-only.</li>
+        <li>Use <code>Military Targets</code> to place any forts, radar sites, or incomplete projects that exist when the scenario begins. Leave it empty if every site should be player-built.</li>
         <li>Click <code>Check Package</code>.</li>
         <li>Click <code>Export DLC Zip</code>.</li>
         <li>Unzip the package into the project <code>dlc</code> folder and refresh the dashboard.</li>
@@ -124,7 +140,7 @@
             <li><b>You want to check the installation:</b> open <code>http://127.0.0.1:5000/status</code>. It lists missing dependencies or invalid DLC packages.</li>
         <li><b>Map loads slowly:</b> wait. DEM terrain files are large.</li>
         <li><b>An airdropped unit does not appear:</b> choose at least one battalion and confirm deployed personnel is greater than zero. Every battalion must have a positive <code>size</code> in its DLC data.</li>
-            <li><b>A unit will not bombard:</b> it must receive the bombard capability named by the active DLC rules, have enough supply, and target a point in range.</li>
+        <li><b>A support mission is unavailable:</b> capability alone is insufficient. An airstrike unit needs an <code>airstrike</code>-role weapon; bombardment needs an indirect <code>bombard</code>-role weapon, enough supply, and a point inside that weapon's final range band.</li>
         <li><b>You made a bad ruling:</b> restore the previous manual checkpoint and re-enter the ruling.</li>
     </ul>
 

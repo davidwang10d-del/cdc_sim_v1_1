@@ -16,6 +16,15 @@
 <div id="crt-overlay"></div>
 <div id="map"></div>
 
+<div id="gis-status-panel" class="glass-panel gis-status-panel" style="display:none;" aria-live="polite">
+    <div class="gis-status-header">
+        <span data-zh="本地 GIS 功能">LOCAL GIS FEATURES</span>
+        <span id="gis-status-summary">0/4 ON</span>
+    </div>
+    <div id="gis-status-list" class="gis-status-list"></div>
+    <div class="gis-status-footnote" data-zh="OFF 表示未安装或无法读取；系统正在使用所示默认规则。">OFF means not installed or unreadable; the displayed safe default is active.</div>
+</div>
+
 <div id="bootloader-screen" style="position:fixed; top:0; left:0; width:100vw; height:100vh; background:#050a0f; z-index:99999; display:flex; flex-direction:column; align-items:center; justify-content:center; font-family:'Courier New', Courier, monospace;">
     
     <div style="position: absolute; top: 25px; right: 30px; display: flex; gap: 10px;">
@@ -40,8 +49,8 @@
     <div id="time-display" style="padding-right: 15px;">D00 00:00:00</div>
     
     <div style="border-left: 1px solid #30363d; padding-left: 15px; padding-right: 15px; display: flex; align-items: center; gap: 5px;">
-        <button class="cmd-btn" onclick="sendCommand('play')" data-zh="▶">▶</button>
-        <button class="cmd-btn cmd-danger" onclick="sendCommand('pause')" data-zh="⏸">⏸</button>
+        <button class="cmd-btn" onclick="sendCommand('play')" aria-label="Run simulation" title="Run the simulation timeline" data-zh="▶ 运行">▶ RUN</button>
+        <button class="cmd-btn cmd-danger" onclick="sendCommand('pause')" aria-label="Pause simulation" title="Pause the simulation timeline" data-zh="⏸ 暂停">⏸ PAUSE</button>
         <button id="speed-default-button" class="cmd-btn" onclick="setRuleSpeed('default')">DEFAULT</button>
         <button id="speed-maximum-button" class="cmd-btn" onclick="setRuleSpeed('maximum')">MAX</button>
         <input type="number" id="custom-speed-input" step="0.1" style="width: 55px; background: #000; color: #7ee787; border: 1px solid #30363d; text-align: center; font-size:12px; outline:none; padding: 4px;">
@@ -68,14 +77,25 @@
 
 <div id="targeting-alert" data-zh="目标系统已激活：等待指挥官下达坐标...">TARGETING SYSTEM ENGAGED: AWAITING COORDINATES...</div>
 
-<div id="deploy-panel" class="glass-panel">
-    <div class="panel-title" style="color:#d97706; border-color:#d97706;" data-zh="🚁 战区空投部署局">🚁 THEATER DEPLOYMENT BUREAU</div>
+<div id="deploy-panel" class="glass-panel" aria-hidden="true">
+    <div class="panel-title deploy-panel-header" style="color:#d97706; border-color:#d97706;">
+        <span data-zh="🚁 战区空投部署局">🚁 THEATER DEPLOYMENT BUREAU</span>
+        <button id="deploy-close-button" class="cmd-btn cmd-danger panel-close-button" type="button" onclick="toggleDeployPanel()" aria-label="Close airdrop panel" title="Close airdrop panel">×</button>
+    </div>
     <label class="data-label" style="display:block; margin-top:5px; width:100%;" data-zh="部队番号">Unit Callsign</label>
     <input type="text" id="dep-name" value="" placeholder="Unit name" class="dark-input">
     <label class="data-label" style="display:block; width:100%;" data-zh="阵营代号">Faction Designation</label>
     <input type="text" id="dep-faction" value="" placeholder="Faction" class="dark-input">
-    <label class="data-label" style="display:block; border-top:1px dashed #30363d; padding-top:8px; margin-top:5px; width:100%;" data-zh="主战装备 (决定射程)">Primary Armament (Dictates Range)</label>
-    <select id="dep-weapon" class="dark-input" onchange="calcDeployStats()"></select>
+    <label class="data-label" style="display:block; width:100%;" data-zh="部队类型">Unit Type</label>
+    <select id="dep-unit-type" class="dark-input" onchange="updateDeployUnitTypeHelp(true)"></select>
+    <div id="dep-unit-type-help" class="deploy-field-help">Capabilities come from the selected DLC unit type.</div>
+    <div id="dep-aircraft-type-group" style="display:none;">
+        <label class="data-label" style="display:block; width:100%;" data-zh="飞机类型">Aircraft Type</label>
+        <select id="dep-aircraft-type" class="dark-input" onchange="updateDeployAircraftTypeHelp()"></select>
+        <div id="dep-aircraft-type-help" class="deploy-field-help">Aircraft type controls sortie behavior and strike performance.</div>
+    </div>
+    <label class="data-label" style="display:block; border-top:1px dashed #30363d; padding-top:8px; margin-top:5px; width:100%;" data-zh="营级武器配置">Battalion Weapon Loadout</label>
+    <div id="dep-weapons-display" class="deploy-field-help">Choose battalions below; their DLC weapon groups determine attack, generation, and range.</div>
     <label class="data-label" style="display:block; border-top:1px dashed #30363d; padding-top:8px; margin-top:5px; width:100%;" data-zh="战斗序列 (营级建制)">Order of Battle (Battalion Count)</label>
     <div class="comp-grid" id="dep-comp-grid"></div>
     <div style="background:rgba(0,0,0,0.5); border:1px solid #d97706; padding:8px; border-radius:2px; margin-bottom:10px;">
@@ -120,7 +140,60 @@
     </section>
 
     <section class="zeus-section">
-        <div class="zeus-section-title" data-zh="3. 设定两阵营关系">3. Set relationship between factions</div>
+        <div class="zeus-section-title" data-zh="3. 城市影响区">3. City influence areas</div>
+        <p class="zeus-description" data-zh="设置圆形城市区域。影响率 0 表示无影响，1 表示纽约级别的最大城市复杂度。区域内部队会通过地形、掩护、正面宽度、隐蔽、移动和疲劳系统受到影响。">Set circular city areas. Influence 0 has no effect; 1 represents maximum New York-scale city complexity. Armies inside are affected through terrain, cover, frontage, concealment, movement, and fatigue.</p>
+        <label class="zeus-field-label" for="admin-city-select" data-zh="已有城市">Existing city</label>
+        <div class="zeus-inline-action">
+            <select id="admin-city-select" class="dark-input" onchange="selectChairCity(this.value)"></select>
+            <button class="cmd-btn" type="button" onclick="startNewChairCity()" data-zh="新增">New</button>
+        </div>
+        <div id="zeus-city-fields">
+            <div class="zeus-field-grid">
+                <label><span data-zh="城市 ID">City ID</span><input id="admin-city-id" class="dark-input" placeholder="city_id"></label>
+                <label><span data-zh="名称">Name</span><input id="admin-city-name" class="dark-input" placeholder="City name"></label>
+            </div>
+            <label class="zeus-field-label" for="admin-city-description" data-zh="城市信息">City info</label>
+            <input id="admin-city-description" class="dark-input" placeholder="Optional Chair note or description">
+            <div class="zeus-field-grid">
+                <label><span data-zh="经度">Longitude</span><input type="number" id="admin-city-lon" min="-180" max="180" step="0.001" class="dark-input"></label>
+                <label><span data-zh="纬度">Latitude</span><input type="number" id="admin-city-lat" min="-90" max="90" step="0.001" class="dark-input"></label>
+                <label><span data-zh="面积（平方公里）">Area (km²)</span><input type="number" id="admin-city-area_km2" min="0" step="0.1" value="0" class="dark-input"></label>
+                <label><span data-zh="影响率（0–1）">Influence (0–1)</span><input type="number" id="admin-city-influence_rate" min="0" max="1" step="0.01" value="0" class="dark-input"></label>
+            </div>
+        </div>
+        <div class="zeus-diplomacy-actions">
+            <button class="cmd-btn zeus-primary-button" type="button" onclick="saveChairCity()" data-zh="保存城市影响">Save city influence</button>
+            <button class="cmd-btn cmd-danger" type="button" onclick="deleteChairCity()" data-zh="删除城市">Delete city</button>
+        </div>
+        <p class="zeus-button-description" data-zh="改动立即生效，但只有手动保存检查点后才会写入进度。">Changes take effect immediately and are written to progress only in a manual checkpoint.</p>
+    </section>
+
+    <section class="zeus-section">
+        <div class="zeus-section-title" data-zh="4. 省份政治与民意">4. Province politics and civilian sentiment</div>
+        <p class="zeus-description" data-zh="每个省份分别保存各阵营状态。民意 −1 表示强烈反对，0 表示中立或无倾向，+1 表示完全支持。占领度为 0–1；敌对阵营同时存在时可形成争夺状态。">Each province stores a separate record for every faction. Sentiment −1 means maximum opposition, 0 is neutral/indifferent, and +1 is maximum support. Occupation is 0–1; hostile factions can produce contested control.</p>
+        <label class="zeus-field-label" for="admin-politics-select" data-zh="已有省份阵营记录">Existing province-faction record</label>
+        <div class="zeus-inline-action">
+            <select id="admin-politics-select" class="dark-input" onchange="selectChairPolitics(this.value)"></select>
+            <button class="cmd-btn" type="button" onclick="startNewChairPolitics()" data-zh="新增">New</button>
+        </div>
+        <div id="zeus-politics-fields">
+            <div class="zeus-field-grid">
+                <label><span data-zh="省份名称">Province</span><input id="admin-politics-province" class="dark-input" placeholder="Exact province map name"></label>
+                <label><span data-zh="阵营">Faction</span><input id="admin-politics-faction" class="dark-input" placeholder="Exact faction name"></label>
+                <label><span data-zh="平民民意（−1 到 +1）">Civilian sentiment (−1 to +1)</span><input type="number" id="admin-politics-civilian_sentiment" min="-1" max="1" step="0.01" value="0" class="dark-input"></label>
+                <label><span data-zh="占领度（0 到 1）">Occupation (0 to 1)</span><input type="number" id="admin-politics-occupation" min="0" max="1" step="0.01" value="0" class="dark-input"></label>
+            </div>
+            <div id="admin-politics-summary" class="zeus-control-help">No established control · influence 0.00 · military presence 0.00</div>
+        </div>
+        <div class="zeus-diplomacy-actions">
+            <button class="cmd-btn zeus-primary-button" type="button" onclick="saveChairPolitics()" data-zh="保存政治状态">Save political state</button>
+            <button class="cmd-btn cmd-danger" type="button" onclick="deleteChairPolitics()" data-zh="删除记录">Delete record</button>
+        </div>
+        <p class="zeus-button-description" data-zh="军队存在会随推演时间改变占领度；主席可随时修改民意或占领度。">Military presence changes occupation over simulation time; Chairs can revise sentiment or occupation at any moment.</p>
+    </section>
+
+    <section class="zeus-section">
+        <div class="zeus-section-title" data-zh="5. 设定两阵营关系">5. Set relationship between factions</div>
         <p class="zeus-description" data-zh="输入两个现有阵营的准确名称。设为盟友后双方部队不再互相视为敌军；设为敌对后，双方可依照现有命令和侦察结果交战。">Enter the exact names of two existing factions. Allied factions stop treating each other as enemies; hostile factions may engage according to their current orders and detection.</p>
         <div class="zeus-field-grid">
             <label><span data-zh="阵营 A">Faction A</span><input type="text" id="admin-dip-f1" placeholder="Exact faction name" class="dark-input"></label>
@@ -220,13 +293,13 @@
     <div id="unit-info"><div style="color: #8b949e; font-style: italic; text-align: center; padding: 30px 0;" data-zh="[ 雷达扫描中 ]<br>等待指挥官选中目标...">[ RADAR SCANNING ]<br>Awaiting Commander to select a target...</div></div>
 </div>
 
-<div id="confirmation-panel" class="glass-panel">
-    <div class="panel-title" style="color:#d97706; border-color:#d97706;" data-zh="⚠️ 战术授权确认 (PROTOCOL ENGAGED)">⚠️ TACTICAL AUTHORIZATION (PROTOCOL ENGAGED)</div>
-    <div style="font-size: 12px; color: #8b949e;"><span data-zh="规划任务类型:">Mission Profile:</span> <span id="draft-type" style="color:#fff; font-weight:bold;">MOVE</span></div>
-    <div style="font-size:11px; color:#8b949e; margin-top:4px;">For a planned route, keep clicking the map to add waypoints before authorizing.</div>
+<div id="confirmation-panel" class="glass-panel" role="dialog" aria-live="polite" aria-labelledby="draft-confirmation-title">
+    <div id="draft-confirmation-title" class="panel-title" style="color:#d97706; border-color:#d97706;" data-zh="⚠️ 战术授权确认">⚠️ TACTICAL AUTHORIZATION</div>
+    <div style="font-size: 12px; color: #8b949e;"><span data-zh="规划任务类型:">Mission Profile:</span> <span id="draft-type" style="color:#fff; font-weight:bold;">RELOCATE</span></div>
+    <div id="draft-instruction" style="font-size:11px; color:#8b949e; margin-top:4px;">Confirm the target before authorization.</div>
     <div class="target-coords" id="draft-coords">LON: 00.000 | LAT: 00.000</div>
     <div style="display: flex; gap: 10px; margin-top: 10px;">
-        <button class="cmd-btn" style="flex: 2; padding: 8px;" onclick="executeDraftedCommand()" data-zh="✅ 授权执行">✅ AUTHORIZE</button>
+        <button id="draft-authorize-button" class="cmd-btn" style="flex: 2; padding: 8px;" onclick="executeDraftedCommand()" data-zh="✅ 授权执行">✅ AUTHORIZE</button>
         <button class="cmd-btn cmd-danger" style="flex: 1;" onclick="clearDraft()" data-zh="❌ 终止指令">❌ ABORT</button>
     </div>
 </div>

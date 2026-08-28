@@ -30,10 +30,11 @@ _CORE_DOCTRINE: dict[str, Any] = {
             "relocate": {
                 "id": "RELOCATE",
                 "label": "Relocate",
-                "summary": "MOVE • AVOID CONTACT",
+                "summary": "ONE POINT • AUTO-DETOUR",
                 "description": (
-                    "Move directly to one destination without initiating ranged combat; "
-                    "close-contact self-defense remains active."
+                    "Travel to one destination without initiating ranged combat. When a "
+                    "detected hostile threatens the remaining path, automatically reroute "
+                    "around contact; close-contact self-defense remains active."
                 ),
                 "color": "#58a6ff",
             },
@@ -52,8 +53,8 @@ _CORE_DOCTRINE: dict[str, Any] = {
                 "label": "Assault",
                 "summary": "MOVE • SEEK CONTACT",
                 "description": (
-                    "Advance toward an objective, halt at detected weapon contact, engage "
-                    "according to the selected stance, and resume when contact clears."
+                    "Advance toward an objective while engaging detected enemies. Continue "
+                    "closing through ranged fire and halt only at close ground contact."
                 ),
                 "color": "#d97706",
             },
@@ -87,6 +88,10 @@ _CORE_DOCTRINE: dict[str, Any] = {
         "assault_halts_at_contact": True,
         "close_contact_self_defense": True,
         "relocate_allows_stance_fire": False,
+        "relocate_avoids_detected_contact": True,
+        "relocate_avoidance_margin_km": 2.0,
+        "relocate_avoidance_cost_multiplier": 1000.0,
+        "relocate_reroute_cooldown_hours": 0.25,
         "route_allows_stance_fire": False,
     },
     "stances": {
@@ -102,7 +107,6 @@ _CORE_DOCTRINE: dict[str, Any] = {
             "political_presence_multiplier": 1.0,
             "base_cover": 0.0,
             "allows_ranged_fire": True,
-            "auto_evasion": False,
             "conceals_border_crossing": False,
         },
         "DEFENSIVE": {
@@ -117,12 +121,11 @@ _CORE_DOCTRINE: dict[str, Any] = {
             "political_presence_multiplier": 1.0,
             "base_cover": 0.15,
             "allows_ranged_fire": True,
-            "auto_evasion": False,
             "conceals_border_crossing": False,
         },
         "STEALTH": {
             "label": "Stealth",
-            "description": "Minimize detection and evade contact at the cost of speed and combat power.",
+            "description": "Minimize detection and exposure at the cost of speed and combat power.",
             "color": "#a78bfa",
             "combat_multiplier": 0.7,
             "movement_multiplier": 0.5,
@@ -132,7 +135,6 @@ _CORE_DOCTRINE: dict[str, Any] = {
             "political_presence_multiplier": 0.1,
             "base_cover": 0.25,
             "allows_ranged_fire": True,
-            "auto_evasion": True,
             "conceals_border_crossing": True,
         },
         "RECON": {
@@ -147,7 +149,6 @@ _CORE_DOCTRINE: dict[str, Any] = {
             "political_presence_multiplier": 1.0,
             "base_cover": 0.0,
             "allows_ranged_fire": True,
-            "auto_evasion": False,
             "conceals_border_crossing": False,
         },
         "RESERVE": {
@@ -162,7 +163,6 @@ _CORE_DOCTRINE: dict[str, Any] = {
             "political_presence_multiplier": 1.0,
             "base_cover": 0.0,
             "allows_ranged_fire": True,
-            "auto_evasion": False,
             "conceals_border_crossing": False,
         },
         "HOLD_FIRE": {
@@ -177,7 +177,6 @@ _CORE_DOCTRINE: dict[str, Any] = {
             "political_presence_multiplier": 1.0,
             "base_cover": 0.0,
             "allows_ranged_fire": False,
-            "auto_evasion": False,
             "conceals_border_crossing": False,
         },
     },

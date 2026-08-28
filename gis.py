@@ -407,7 +407,59 @@ class MapEngine:
         x, y = self.lonlat_to_grid(lon, lat)
         return self.road_matrix[y][x] == 1
 
-    def find_path(self, start_lon, start_lat, target_lon, target_lat, unit_composition=None, unit_capabilities=None):
+    def _build_avoidance_cost_grid(self, avoidance_zones):
+        """Rasterize temporary contact-avoidance penalties for one route search.
+
+        These costs are deliberately not written into ``path_grid``: detected
+        contacts are faction-specific and short-lived, while terrain, roads,
+        and rivers remain shared theater data. A high finite cost lets a unit
+        escape a zone it is already inside and still reach a destination that
+        cannot be approached without entering the threat envelope.
+        """
+        penalties = np.zeros((self.grid_h, self.grid_w), dtype=np.float64)
+        for raw_zone in avoidance_zones or []:
+            if not isinstance(raw_zone, dict):
+                continue
+            try:
+                zone_lon = float(raw_zone["lon"])
+                zone_lat = float(raw_zone["lat"])
+                radius_km = float(raw_zone["radius_km"])
+                cost_multiplier = float(raw_zone.get("cost_multiplier", 1000.0))
+            except (KeyError, TypeError, ValueError):
+                continue
+            if not all(math.isfinite(value) for value in (zone_lon, zone_lat, radius_km, cost_multiplier)):
+                continue
+            if radius_km <= 0 or cost_multiplier <= 0:
+                continue
+
+            latitude_delta = radius_km / 110.574
+            longitude_scale = max(0.01, abs(math.cos(math.radians(zone_lat))))
+            longitude_delta = radius_km / (111.320 * longitude_scale)
+            corner_a = self.lonlat_to_grid(zone_lon - longitude_delta, zone_lat + latitude_delta)
+            corner_b = self.lonlat_to_grid(zone_lon + longitude_delta, zone_lat - latitude_delta)
+            min_x, max_x = sorted((corner_a[0], corner_b[0]))
+            min_y, max_y = sorted((corner_a[1], corner_b[1]))
+
+            for grid_y in range(min_y, max_y + 1):
+                for grid_x in range(min_x, max_x + 1):
+                    lon, lat = self.grid_to_lonlat(grid_x, grid_y)
+                    distance_km = haversine_distance(lon, lat, zone_lon, zone_lat)
+                    if distance_km > radius_km:
+                        continue
+                    depth = max(0.0, 1.0 - distance_km / radius_km)
+                    penalties[grid_y, grid_x] += cost_multiplier * (1.0 + 4.0 * depth * depth)
+        return penalties
+
+    def find_path(
+        self,
+        start_lon,
+        start_lat,
+        target_lon,
+        target_lat,
+        unit_composition=None,
+        unit_capabilities=None,
+        avoidance_zones=None,
+    ):
         start_pos = self.lonlat_to_grid(start_lon, start_lat)
         end_pos = self.lonlat_to_grid(target_lon, target_lat)
 
@@ -421,6 +473,18 @@ class MapEngine:
             river_penalty = self.river_penalty_heavy
         if pathing_rules["river_engineer_capability"] in capabilities:
             river_penalty = self.river_penalty_engineer
+
+        avoidance_costs = (
+            self._build_avoidance_cost_grid(avoidance_zones)
+            if avoidance_zones
+            else None
+        )
+        if avoidance_costs is not None:
+            # A relocating formation may first detect a threat after entering
+            # its envelope. Do not charge the already-occupied cell, so A*
+            # chooses the cheapest exit instead of treating every escape
+            # direction as blocked.
+            avoidance_costs[start_pos[1], start_pos[0]] = 0.0
 
         open_set = []
         heapq.heappush(open_set, (0.0, start_pos))
@@ -448,6 +512,9 @@ class MapEngine:
                         if getattr(self, 'river_matrix', None) is not None:
                             if self.river_matrix[neighbor[1]][neighbor[0]] == 1:
                                 terrain_cost += river_penalty
+                    terrain_cost = float(terrain_cost)
+                    if avoidance_costs is not None:
+                        terrain_cost += float(avoidance_costs[neighbor[1], neighbor[0]])
                             
                     move_cost = terrain_cost * (1.414 if dx != 0 and dy != 0 else 1.0)
                     tentative_g_score = g_score[current] + move_cost

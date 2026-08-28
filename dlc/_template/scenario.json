@@ -26,6 +26,9 @@
   },
   "initial_units_file": "units.json",
   "simulation_rules_file": "rules.json",
+  "cities": [],
+  "province_politics": [],
+  "military_installations": [],
   "committee": {
     "committee_name": "Custom Crisis Committee",
     "committee_type": "continuous_crisis",

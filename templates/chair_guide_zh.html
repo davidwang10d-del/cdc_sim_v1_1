@@ -49,13 +49,25 @@
     <h2>三、作战指令</h2>
     <ul>
         <li><code>Hold</code>：停止移动，保留当前战斗姿态。</li>
-        <li><code>Relocate</code>：直接机动，不主动发起远程交火；近距离接敌时仍会自卫。</li>
-        <li><code>Planned Route</code>：在地图上连续点击多个航路点，最后统一授权；行军途中保持远程停火。</li>
-        <li><code>Assault</code>：以较慢速度突击，发现敌军进入武器射程后停下交战，接触解除后继续推进。</li>
+        <li><code>Relocate</code>：向单一目的地机动，不主动发起远程交火；已侦测敌军威胁剩余路线时，会保留目的地并自动绕行，近距离接敌时仍会自卫。</li>
+        <li><code>Planned Route</code>：在地图上连续点击多个航路点，最后统一授权；行军途中保持远程停火，并严格保留主席指定的路线，不自动替换航点。</li>
+        <li><code>Assault</code>：以较慢速度突击，在远程接触中边打边接近；只有已侦测敌军在近距离地面接触中阻挡推进时才停止。</li>
         <li><code>Defend Here</code>：停止、恢复并逐步构筑阵地，同时保留所选战斗姿态。</li>
         <li><code>Fortify</code>：消耗补给并增加疲劳，快速构筑工事；完成后自动转为就地防御。</li>
     </ul>
     <p>合并后的 <b>Operational Order</b> 面板包含两个独立选择：<b>Task</b> 决定部队做什么、去哪里；<b>Combat Stance</b> 决定火力纪律、速度、隐蔽、侦察和战斗倍率。更换其中一个不会改变另一个。Relocate 与 Planned Route 始终压制远程主动开火，但保留近距离自卫；Defend 与 Fortify 在任何姿态下都能构筑工事。</p>
+
+    <h2>军事设施</h2>
+    <p><b>Fortify 是部队临时野战工事；Military Construction 才会建立持久、可单独攻击的设施。</b>让地面战斗部队停下并选中，滚动到 <code>Military Construction</code>，选择 Fortification 或 Radar Site，再点击 <code>Build at Current Position</code>。点击 Play 后才推进施工；建设部队必须留在附近，施工消耗补给、增加疲劳，并会被压制减速。Hold 或移动只会暂停，原建设部队以后可以继续。</p>
+    <p>启用的要塞为附近盟军增加掩护；启用的雷达按 DLC 射程和概率建立接触。攻击敌方设施时，选择有能力的部队，点击 Assault、Bombard Area 或 Airstrike，并在选点提示开启时点击设施菱形图标。摧毁后效果停止但残骸保留。建设进度、完整度和摧毁状态只会写入手动检查点。</p>
+
+    <h2>城市影响</h2>
+    <p>城市影响区为圆形，影响率范围是 <code>0</code> 到 <code>1</code>。0 不产生数值影响；1 代表纽约级别的最高城市复杂度。区域内部队会通过地形适应、掩护、正面宽度、隐蔽、移动和疲劳系统受到影响。多个城市重叠时采用最高影响率。</p>
+    <p>推演期间点击 <code>Zeus</code>，在 <code>City influence areas</code> 中新增、修改或删除城市。修改立即生效；如需在重启后保留，请手动保存检查点。</p>
+
+    <h2>省份政治与平民民意</h2>
+    <p>每个省份会分别保存各阵营的政治状态。平民民意 <code>-1</code> 表示最强反对，<code>0</code> 表示中立或无倾向（默认值），<code>+1</code> 表示最强支持。军队存在会逐步改变 <code>0</code> 到 <code>1</code> 的占领度。敌对阵营拥有显著军力或占领度时，省份进入争夺状态；盟友之间不会互相争夺。</p>
+    <p>推演期间打开 <code>Zeus</code>，在 <code>Province politics and civilian sentiment</code> 中修改民意或占领度。地图使用控制方的阵营颜色；争夺省份显示为琥珀色。鼠标悬停可查看各阵营的民意、占领度和影响力。</p>
 
     <h2>四、如何录入危机裁定</h2>
     <ol>
@@ -81,7 +93,7 @@
     <h2>五、手动保存与恢复</h2>
     <div class="box warn"><b>系统没有自动保存。</b> 指令、主席团修改和剧本重置只保存在内存中，必须点击保存按钮才会写入检查点。</div>
     <ol>
-        <li>点击 <code>Saves</code>，查看三个检查点的保存时间、推演时间、部队数量和兼容状态。</li>
+        <li>点击 <code>Saves</code>，查看三个检查点的保存时间、推演时间、部队/设施数量和兼容状态。</li>
         <li>空检查点点击 <code>Save here</code>；已有检查点点击 <code>Overwrite</code>，并确认覆盖。</li>
         <li>需要回退时，在最后一个正确的检查点点击 <code>Restore</code>。恢复会覆盖当前状态，并让推演保持暂停。</li>
         <li>需要重新开始时点击 <code>Reset scenario</code>。重置不会自动生成备份。</li>
@@ -91,10 +103,13 @@
     <h2>六、如何制作自己的 DLC</h2>
     <ol>
         <li>点击主界面的 <code>Editor</code>。</li>
-        <li>按左侧顺序填写：Scenario & Map、Simulation Rules、Committee、Diplomacy、Units、Battalion Types、Weapons。</li>
+        <li>按左侧顺序填写：Scenario & Map、Simulation Rules、Committee、Diplomacy、Units、Battalion Types、Weapons、Military Targets、Export。</li>
         <li>在 Simulation Rules 中定义战役专用单位类型、能力名称和数值规则；战术指令与战斗姿态属于共享核心规则，在编辑器中为只读。</li>
-        <li>在 Battalion Types 中添加步兵、装甲、炮兵、工兵、民兵等营种。</li>
-        <li>在 Weapons 中设置武器名称和射程。</li>
+        <li>在 Scenario &amp; Map 的 City Influence Areas 中设置城市资料、中心坐标、平方公里面积和默认 0–1 影响率。</li>
+        <li>在 Province Politics 中，为需要偏离默认中立状态的每个“省份—阵营”组合填写平民民意和初始占领度。</li>
+        <li>在 Battalion Types 中添加步兵、装甲、炮兵、工兵、民兵等营种，分开填写装甲防护/装甲代数，并分配每营武器组数量。</li>
+        <li>在 Weapons 中设置武器代数、直接射击/炮击/空袭角色，以及由近到远的软攻、硬攻、穿甲射程分段。</li>
+        <li>在 Military Targets 中加入剧本开始时已有的要塞、雷达或未完工项目；如果全部由玩家现场建设，可以保持空列表。</li>
         <li>进入 Export 页面，点击 <code>Check Package</code> 检查。</li>
         <li>点击 <code>Export DLC Zip</code> 导出压缩包。</li>
         <li>把压缩包解压到项目的 <code>dlc</code> 文件夹下，并给文件夹改一个英文 ID 名称。</li>

@@ -1,0 +1,78 @@
+{
+  "scenario_name": "Test DLC - Full Spectrum Sandbox",
+  "description": "A synthetic four-faction sandbox containing every supported unit class and engine capability for regression and manual testing.",
+  "map_center": [0.0, 0.0],
+  "map_zoom": 6,
+  "map_config": {
+    "bounds": { "min_lon": -5.0, "max_lon": 5.0, "min_lat": -5.0, "max_lat": 5.0 },
+    "grid_resolution": [200, 200],
+    "dem_analysis_resolution": [1200, 1200],
+    "fallback_elevation_m": 0.0,
+    "terrain_elevation_scale_m": 5000.0,
+    "terrain_cost_multiplier": 50.0,
+    "terrain_cost_exponent": 2.0,
+    "pathing": {
+      "road_cost": 0.5,
+      "river_penalty_default": 50.0,
+      "river_penalty_heavy": 500.0,
+      "river_penalty_engineer": 10.0
+    },
+    "dem_dir": "",
+    "dem_file": "",
+    "roads_file": "",
+    "rivers_file": "",
+    "provinces_file": "",
+    "province_name_property": ""
+  },
+  "initial_units_file": "units.json",
+  "simulation_rules_file": "rules.json",
+  "cities": [
+    { "id": "central_test_city", "name": "Central Test City", "description": "Neutral objective for influence and urban-area tests.", "lon": 0.0, "lat": 0.0, "area_km2": 100.0, "influence_rate": 0.1 }
+  ],
+  "province_politics": [],
+  "military_installations": [
+    {
+      "id": "blue_forward_fort",
+      "type_id": "FORTIFICATION",
+      "name": "Blue Forward Fort",
+      "faction": "BLUE",
+      "lon": 1.9,
+      "lat": 2.0
+    },
+    {
+      "id": "red_early_warning_radar",
+      "type_id": "RADAR_SITE",
+      "name": "Red Early-Warning Radar",
+      "faction": "RED",
+      "lon": -3.0,
+      "lat": 1.2
+    }
+  ],
+  "committee": {
+    "committee_name": "Full Spectrum Test Committee",
+    "committee_type": "continuous_crisis",
+    "simulation_scope": "systems_testing",
+    "start_date": "T00",
+    "chair_visibility": "full_map_and_private_records",
+    "delegate_visibility": "faction_limited_fog_of_war",
+    "public_briefing": "Four fictional factions begin around a neutral objective with complete combined-arms test formations.",
+    "rules_of_engagement": [
+      "This scenario is intended for feature testing rather than historical simulation.",
+      "Exercise movement, combat, support missions, diplomacy, directives, and persistence."
+    ],
+    "delegate_roles": [
+      { "faction": "RED", "role": "Red Test Command", "briefing": "Validate Red force controls and visibility." },
+      { "faction": "BLUE", "role": "Blue Test Command", "briefing": "Validate Blue force controls and visibility." },
+      { "faction": "GREEN", "role": "Green Test Command", "briefing": "Validate Green force controls and visibility." },
+      { "faction": "GOLD", "role": "Gold Test Command", "briefing": "Validate Gold force controls and visibility." }
+    ],
+    "victory_conditions": ["Testing succeeds when all required mechanics have been exercised without validation or runtime errors."],
+    "staff_notes": "Synthetic data: balance and historical realism are intentionally secondary to coverage."
+  },
+  "diplomacy_blocs": [
+    { "bloc_name": "Red Bloc", "members": ["RED"] },
+    { "bloc_name": "Blue Bloc", "members": ["BLUE"] },
+    { "bloc_name": "Green Bloc", "members": ["GREEN"] },
+    { "bloc_name": "Gold Bloc", "members": ["GOLD"] }
+  ]
+}

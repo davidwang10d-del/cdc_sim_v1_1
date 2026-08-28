@@ -1,7 +1,32 @@
 {
   "standard": {
-    "name": "Standard Armament",
-    "range": 1.0,
-    "indirect_fire": false
+    "name": "Standard Battalion Armament",
+    "generation": 1,
+    "indirect_fire": false,
+    "roles": ["direct_fire"],
+    "range_bands": [
+      {"max_range_km": 0.25, "soft_attack": 20.0, "hard_attack": 5.0, "armor_piercing": 50.0},
+      {"max_range_km": 1.0, "soft_attack": 12.0, "hard_attack": 3.0, "armor_piercing": 40.0}
+    ]
+  },
+  "standard_howitzer": {
+    "name": "Standard Field Howitzer",
+    "generation": 1,
+    "indirect_fire": true,
+    "roles": ["direct_fire", "bombard"],
+    "range_bands": [
+      {"max_range_km": 10.0, "soft_attack": 80.0, "hard_attack": 15.0, "armor_piercing": 80.0},
+      {"max_range_km": 20.0, "soft_attack": 50.0, "hard_attack": 8.0, "armor_piercing": 60.0}
+    ]
+  },
+  "air_ordnance": {
+    "name": "Standard Air-to-Ground Ordnance",
+    "generation": 2,
+    "indirect_fire": false,
+    "roles": ["airstrike"],
+    "range_bands": [
+      {"max_range_km": 5.0, "soft_attack": 500.0, "hard_attack": 300.0, "armor_piercing": 500.0},
+      {"max_range_km": 15.0, "soft_attack": 350.0, "hard_attack": 225.0, "armor_piercing": 450.0}
+    ]
   }
 }

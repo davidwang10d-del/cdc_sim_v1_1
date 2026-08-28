@@ -1,0 +1,72 @@
+{
+  "service_rifle": {
+    "name": "Service Rifle and Light Anti-Tank Weapons",
+    "generation": 3,
+    "indirect_fire": false,
+    "roles": ["direct_fire"],
+    "range_bands": [
+      {"max_range_km": 0.2, "soft_attack": 5.0, "hard_attack": 1.0, "armor_piercing": 80.0},
+      {"max_range_km": 0.5, "soft_attack": 3.0, "hard_attack": 0.5, "armor_piercing": 60.0}
+    ]
+  },
+  "tank_cannon": {
+    "name": "Main Battle Tank Cannon",
+    "generation": 4,
+    "indirect_fire": false,
+    "roles": ["direct_fire"],
+    "range_bands": [
+      {"max_range_km": 1.5, "soft_attack": 18.0, "hard_attack": 40.0, "armor_piercing": 450.0},
+      {"max_range_km": 3.0, "soft_attack": 12.0, "hard_attack": 32.0, "armor_piercing": 380.0}
+    ]
+  },
+  "field_mortar": {
+    "name": "120 mm Field Mortar",
+    "generation": 3,
+    "indirect_fire": true,
+    "roles": ["direct_fire", "bombard"],
+    "range_bands": [
+      {"max_range_km": 3.0, "soft_attack": 25.0, "hard_attack": 5.0, "armor_piercing": 100.0},
+      {"max_range_km": 8.0, "soft_attack": 14.0, "hard_attack": 2.0, "armor_piercing": 60.0}
+    ]
+  },
+  "field_howitzer": {
+    "name": "155 mm Field Howitzer",
+    "generation": 4,
+    "indirect_fire": true,
+    "roles": ["direct_fire", "bombard"],
+    "range_bands": [
+      {"max_range_km": 15.0, "soft_attack": 110.0, "hard_attack": 25.0, "armor_piercing": 120.0},
+      {"max_range_km": 30.0, "soft_attack": 65.0, "hard_attack": 15.0, "armor_piercing": 90.0}
+    ]
+  },
+  "rocket_artillery": {
+    "name": "Multiple Launch Rocket System",
+    "generation": 4,
+    "indirect_fire": true,
+    "roles": ["direct_fire", "bombard"],
+    "range_bands": [
+      {"max_range_km": 20.0, "soft_attack": 150.0, "hard_attack": 35.0, "armor_piercing": 150.0},
+      {"max_range_km": 45.0, "soft_attack": 80.0, "hard_attack": 18.0, "armor_piercing": 100.0}
+    ]
+  },
+  "air_defense_missile": {
+    "name": "Mobile Surface-to-Air Missile Battery",
+    "generation": 4,
+    "indirect_fire": false,
+    "roles": ["direct_fire"],
+    "range_bands": [
+      {"max_range_km": 3.0, "soft_attack": 3.0, "hard_attack": 27.0, "armor_piercing": 250.0},
+      {"max_range_km": 6.0, "soft_attack": 1.0, "hard_attack": 16.0, "armor_piercing": 200.0}
+    ]
+  },
+  "air_ordnance": {
+    "name": "Air-to-Ground Ordnance",
+    "generation": 5,
+    "indirect_fire": false,
+    "roles": ["airstrike"],
+    "range_bands": [
+      {"max_range_km": 5.0, "soft_attack": 500.0, "hard_attack": 300.0, "armor_piercing": 500.0},
+      {"max_range_km": 15.0, "soft_attack": 350.0, "hard_attack": 225.0, "armor_piercing": 450.0}
+    ]
+  }
+}

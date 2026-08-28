@@ -28,6 +28,11 @@ log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
 
 app = Flask(__name__)
+# This is a local, actively edited application. Keep Jinja templates and static
+# assets in sync while the server remains open so a newly served script cannot
+# run against an older cached dashboard DOM.
+app.config["TEMPLATES_AUTO_RELOAD"] = True
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 
 # 🟢 Global variables: Engine and physics thread initialized as empty shells
 engine = None
@@ -88,6 +93,20 @@ def manual_save_slot(data, default="slot_1"):
     if slot not in MANUAL_SAVE_SLOTS:
         raise APIInputError("Choose manual checkpoint 1, 2, or 3")
     return slot
+
+
+def clear_support_mission_state(unit):
+    """Remove transient support-mission data when another order supersedes it."""
+    for attribute in ("bombard_timer", "_bombard_effective_hours", "_bombard_completion_reason"):
+        if hasattr(unit, attribute):
+            delattr(unit, attribute)
+    unit.bombard_casualties = 0.0
+    unit.bombard_installation_damage = 0.0
+    unit.bombard_installations_destroyed = 0
+    unit.base_lon = None
+    unit.base_lat = None
+    if hasattr(unit, "clear_relocation_avoidance"):
+        unit.clear_relocation_avoidance()
 
 def start_physics_thread(target_engine=None):
     """Delay activation of the physics timeline after mounting a DLC"""
@@ -197,15 +216,12 @@ def mount_dlc():
             start_physics_thread(candidate)
 
         factions = sorted({unit.faction for unit in candidate.units.values()})
-        mount_warnings = []
-        if (candidate.map_config.get("dem_dir") or candidate.map_config.get("dem_file")) and not candidate.map_engine.use_real_dem:
-            mount_warnings.append("Configured elevation data failed to load; flat fallback terrain is active.")
-        if candidate.map_config.get("roads_file") and not candidate.map_engine.road_matrix.any():
-            mount_warnings.append("Configured road data produced no usable road nodes.")
-        if candidate.map_config.get("rivers_file") and not candidate.map_engine.river_matrix.any():
-            mount_warnings.append("Configured river data produced no usable river segments.")
-        if candidate.map_config.get("provinces_file") and not candidate.prov_engine.provinces:
-            mount_warnings.append("Configured province data produced no usable provinces.")
+        gis_status = candidate.get_gis_status()
+        mount_warnings = [
+            feature["warning"]
+            for feature in gis_status["features"]
+            if feature.get("warning")
+        ]
         return jsonify({
             "status": "ok", 
             "config": {
@@ -214,6 +230,7 @@ def mount_dlc():
                 "zoom": candidate.scenario_data["map_zoom"],
                 "factions": factions,
                 "warnings": mount_warnings,
+                "gis": gis_status,
                 "rules_schema_version": candidate.rules["schema_version"],
             }
         })
@@ -261,13 +278,37 @@ def get_registry():
         "rules": active.rules if active else {},
     })
 
+
+@app.route('/api/gis_status', methods=['GET'])
+def get_gis_status():
+    active = engine
+    if not active:
+        return jsonify({"status": "unmounted", "enabled_count": 0, "features": []})
+    return jsonify({"status": "ok", **active.get_gis_status()})
+
 @app.route('/api/state', methods=['GET'])
 def get_state():
     active = engine
     if not active:
         return jsonify({"status": "unmounted"})
     with active.lock:
-        units_data = {u_id: unit.to_dict() for u_id, unit in active.units.items()}
+        # Presence is positional, not time-based. Keep province tooltips correct
+        # even when the simulation is paused or a unit was just edited/loaded.
+        active.refresh_province_presence()
+        units_data = {}
+        for unit_id, unit in active.units.items():
+            unit_data = unit.to_dict()
+            city_context = active.get_city_context(unit.lon, unit.lat)
+            effective_terrain = active.get_terrain_complexity(unit.lon, unit.lat)
+            unit_data["city_id"] = city_context["id"]
+            unit_data["city_name"] = city_context["name"]
+            unit_data["city_influence_rate"] = city_context["influence_rate"]
+            unit_data["effective_terrain_complexity"] = effective_terrain
+            unit_data["effective_movement_speed"] = unit.get_effective_movement_speed(effective_terrain)
+            unit_data["installation_cover_bonus"] = active.get_installation_cover_bonus(unit)
+            project = active.get_builder_project(unit_id)
+            unit_data["active_construction"] = project.to_dict() if project else None
+            units_data[unit_id] = unit_data
         return jsonify({
             "status": "ok",
             "time": {
@@ -279,7 +320,9 @@ def get_state():
                 "paused": active.is_paused,
             },
             "units": units_data,
-            "provinces": active.province_influence,
+            "installations": active.get_installation_state(),
+            "cities": active.get_city_state(),
+            "province_politics": active.get_province_politics_state(),
             "latest_logs": active.structured_logs[-int(active.rules["state_limits"]["state_feed_logs"]):],
         })
 
@@ -327,8 +370,15 @@ def get_terrain():
     try:
         active = mounted_engine()
         lon, lat = coordinates(request.args.get('lon'), request.args.get('lat'))
-        tc = active.map_engine.get_terrain_complexity(lon, lat)
-        return jsonify({"status": "ok", "complexity": round(tc, 2)})
+        natural = active.map_engine.get_terrain_complexity(lon, lat)
+        city = active.get_city_context(lon, lat)
+        effective = active.get_terrain_complexity(lon, lat)
+        return jsonify({
+            "status": "ok",
+            "complexity": round(effective, 2),
+            "natural_complexity": round(natural, 2),
+            "city": city,
+        })
     except APIInputError as exc:
         return jsonify({"status": "error", "msg": str(exc), "complexity": 0.0}), exc.status_code
 
@@ -351,9 +401,13 @@ def execute_command():
         if not isinstance(command_text, str) or not command_text.strip():
             raise APIInputError("Command is empty")
         parts = command_text.strip().split()
-        cmd = parts[0].lower()
+        requested_cmd = parts[0].lower()
+        # Relocate is the canonical order name. `move` remains an API alias so
+        # older clients and macros continue to work without creating two modes.
+        cmd = "relocate" if requested_cmd == "move" else requested_cmd
         waypoints_data = data.get("waypoints", [])
         message = "Execution successful"
+        queued = False
 
         with active.lock:
             if cmd in {"play", "pause"}:
@@ -381,7 +435,25 @@ def execute_command():
                 message = f"Simulation speed set to {multiplier:g}x"
                 active.log_event(f"[System] Simulation speed set to {multiplier:g}x.", faction="SYSTEM", msg_type="system")
 
-            elif cmd in {"move", "attack", "route"}:
+            elif cmd == "build":
+                if len(parts) != 3:
+                    raise APIInputError("Usage: build <unit_id> <installation_type>")
+                try:
+                    installation, resumed = active.start_installation_construction(
+                        parts[1], parts[2]
+                    )
+                except ValueError as exc:
+                    raise APIInputError(str(exc)) from exc
+                message = (
+                    f"Resumed {installation.name}"
+                    if resumed
+                    else f"Construction started: {installation.name}"
+                )
+                queued = active.is_paused
+                if queued:
+                    message += "; queued while paused — press Run to begin construction"
+
+            elif cmd in {"relocate", "attack", "route"}:
                 if len(parts) < 2:
                     raise APIInputError(f"Usage: {cmd} <unit_id> <longitude> <latitude>")
                 unit_id = parts[1]
@@ -437,19 +509,38 @@ def execute_command():
                 unit.waypoints = full_path
                 unit.target_lon, unit.target_lat = targets[-1]
                 unit.status = "MOVING"
-                unit.set_order_role({"move": "relocate", "route": "route", "attack": "assault"}[cmd])
+                unit.set_order_role({"relocate": "relocate", "route": "route", "attack": "assault"}[cmd])
                 unit.entrenchment = float(active.rules["unit_defaults"]["entrenchment"])
-                if hasattr(unit, "bombard_timer"):
-                    delattr(unit, "bombard_timer")
+                clear_support_mission_state(unit)
                 order_profile = active.rules["orders"]["modes"][unit.order_role()]
                 posture_label = active.rules["stances"][unit.stance]["label"]
                 message = f"{order_profile['label']} order issued to {unit.name} using {posture_label} posture"
+                queued = active.is_paused
+                if queued:
+                    message += "; queued while the simulation is paused — press Run to begin movement"
                 if cmd == "attack":
-                    active.log_event(f"⚔️ [Assault] {unit.name} is advancing toward the objective and will halt at detected contact.", faction=unit.faction, msg_type="combat")
+                    detail = (
+                        f"⚔️ [Assault Queued] {unit.name} will advance through ranged contact when the timeline resumes and halt only at close ground contact."
+                        if queued else
+                        f"⚔️ [Assault] {unit.name} is advancing through ranged contact and will halt only at close ground contact."
+                    )
+                    active.log_event(detail, faction=unit.faction, msg_type="combat")
                 elif cmd == "route":
-                    active.log_event(f"🗺️ [Planned Route] {unit.name} received a holding-fire route with {len(targets)} waypoints.", faction=unit.faction, msg_type="move")
+                    detail = (
+                        f"🗺️ [Planned Route Queued] {unit.name} will follow {len(targets)} holding-fire waypoint(s) when the timeline resumes."
+                        if queued else
+                        f"🗺️ [Planned Route] {unit.name} received a holding-fire route with {len(targets)} waypoints."
+                    )
+                    active.log_event(detail, faction=unit.faction, msg_type="move")
                 else:
-                    active.log_event(f"🚀 [Relocate] {unit.name} is moving directly to the objective without initiating ranged combat.", faction=unit.faction, msg_type="move")
+                    detail = (
+                        f"📍 [Relocate Queued] {unit.name} will move to the objective when the timeline resumes and reroute around detected threats."
+                        if queued else
+                        f"🚀 [Relocate] {unit.name} is moving to the objective without initiating ranged combat and will reroute around detected threats."
+                    )
+                    active.log_event(detail, faction=unit.faction, msg_type="move")
+                    if active.refresh_relocation_route(unit, force=True):
+                        message += "; contact-avoidance route calculated around detected hostiles"
 
             elif cmd in {"airstrike", "bombard"}:
                 if len(parts) != 4:
@@ -459,30 +550,77 @@ def execute_command():
                     raise APIInputError("Unit not found", 404)
                 target_lon, target_lat = coordinates(parts[2], parts[3])
                 unit = active.units[unit_id]
+                if unit.personnel <= 0:
+                    raise APIInputError("A neutralized unit cannot execute a support mission")
+                if unit.status in {"BOMBARDING", "AIRSTRIKE_OUTBOUND", "AIRSTRIKE_RTB"}:
+                    raise APIInputError("This unit already has an active support mission; halt it before issuing another")
 
                 if cmd == "airstrike":
-                    capability = active.rules["missions"]["airstrike"]["capability"]
+                    airstrike_rules = active.rules["missions"]["airstrike"]
+                    capability = airstrike_rules["capability"]
                     if not unit.has_capability(capability):
                         raise APIInputError(f"This unit has no {capability} capability in its DLC data")
+                    aircraft = unit.get_airstrike_parameters()
+                    if not aircraft["strike_weapon_ids"]:
+                        raise APIInputError(
+                            "This unit has airstrike capability but its battalions mount no airstrike-role weapon"
+                        )
+                    sortie_distance = haversine_distance(unit.lon, unit.lat, target_lon, target_lat)
+                    sortie_range = float(aircraft["sortie_range_km"])
+                    if sortie_distance > sortie_range:
+                        raise APIInputError(
+                            f"Target is outside sortie range for {aircraft['label']} "
+                            f"({sortie_distance:.1f}km > {sortie_range:.1f}km)"
+                        )
+                    supply_cost = float(aircraft["supply_cost"])
+                    if unit.supply < supply_cost:
+                        raise APIInputError(
+                            f"{aircraft['label']} airstrike requires {supply_cost:g}% supply; "
+                            f"this unit has {unit.supply:.1f}%"
+                        )
+                    clear_support_mission_state(unit)
                     unit.base_lon, unit.base_lat = unit.lon, unit.lat
                     unit.target_lon, unit.target_lat = target_lon, target_lat
                     unit.waypoints = [(target_lon, target_lat)]
                     unit.status = "AIRSTRIKE_OUTBOUND"
                     unit.set_order_role("hold")
-                    active.log_event(f"🛫 [Strike] {unit.name} scrambled and is flying towards the target zone.", faction=unit.faction, msg_type="combat")
+                    resources = active.rules["resources"]
+                    unit.supply = max(float(resources["minimum"]), unit.supply - supply_cost)
+                    unit.fatigue = min(float(resources["maximum"]), unit.fatigue + float(aircraft["fatigue_cost"]))
+                    unit.entrenchment = float(active.rules["unit_defaults"]["entrenchment"])
+                    message = f"{unit.name} launched a {aircraft['label']} airstrike at {sortie_distance:.1f} km"
+                    active.log_event(
+                        f"🛫 [Airstrike] {unit.name} ({aircraft['label']}; {aircraft['attack_profile']}) launched for "
+                        f"coordinates {target_lon:.4f}, {target_lat:.4f} ({sortie_distance:.1f} km); "
+                        f"munitions committed and profile-adjusted AA exposure active.",
+                        faction=unit.faction,
+                        msg_type="combat",
+                    )
                 else:
                     bombard_rules = active.rules["missions"]["bombard"]
                     if not unit.has_capability(bombard_rules["capability"]):
                         raise APIInputError("This unit has no bombard capability in its DLC data")
+                    if unit.bombard_range <= 0:
+                        raise APIInputError(
+                            "This unit has bombard capability but its battalions mount no indirect bombard weapon"
+                        )
                     fire_dist = haversine_distance(unit.lon, unit.lat, target_lon, target_lat)
-                    if fire_dist > unit.active_fire_range:
-                        raise APIInputError(f"Target is outside weapon range ({fire_dist:.1f}km > {unit.active_fire_range:.1f}km)")
-                    if unit.supply <= float(bombard_rules["minimum_supply_to_start"]):
+                    if fire_dist > unit.bombard_range:
+                        raise APIInputError(f"Target is outside bombard range ({fire_dist:.1f}km > {unit.bombard_range:.1f}km)")
+                    if unit.supply < float(bombard_rules["minimum_supply_to_start"]):
                         raise APIInputError("Unit lacks ammunition/supply for a fire mission")
+                    clear_support_mission_state(unit)
+                    unit.waypoints = []
                     unit.target_lon, unit.target_lat = target_lon, target_lat
                     unit.status = "BOMBARDING"
+                    unit.bombard_timer = float(bombard_rules["duration_hours"])
                     unit.set_order_role("hold")
-                    active.log_event(f"☄️ [Firepower] {unit.name} initiated artillery bombardment.", faction=unit.faction, msg_type="combat")
+                    message = f"{unit.name} began a {unit.bombard_timer:g}-hour bombardment at {fire_dist:.1f} km"
+                    active.log_event(
+                        f"☄️ [Bombardment] {unit.name} opened a {unit.bombard_timer:g}-hour fire mission on coordinates {target_lon:.4f}, {target_lat:.4f} ({fire_dist:.1f} km).",
+                        faction=unit.faction,
+                        msg_type="combat",
+                    )
 
             elif cmd in {"defend", "fortify"}:
                 if len(parts) != 2:
@@ -509,8 +647,7 @@ def execute_command():
                 order_rules = active.rules["orders"]
                 unit.status = order_rules["fortifying_status"] if cmd == "fortify" else order_rules["defending_status"]
                 stance_label = active.rules["stances"][unit.stance]["label"]
-                if hasattr(unit, "bombard_timer"):
-                    delattr(unit, "bombard_timer")
+                clear_support_mission_state(unit)
                 if cmd == "fortify":
                     message = f"{unit.name} is fortifying in {stance_label} stance"
                     active.log_event(
@@ -564,14 +701,15 @@ def execute_command():
                 unit.target_lat = None
                 unit.set_order_role("hold")
                 unit.status = "IDLE"
-                if hasattr(unit, "bombard_timer"):
-                    delattr(unit, "bombard_timer")
+                clear_support_mission_state(unit)
                 message = f"{unit.name} halted"
 
             else:
                 raise APIInputError(f"Unknown command [{cmd}]")
 
-        return jsonify({"status": "ok", "msg": message})
+            response_paused = active.is_paused
+
+        return jsonify({"status": "ok", "msg": message, "paused": response_paused, "queued": queued})
     except APIInputError as exc:
         return api_error(exc, exc.status_code)
     except Exception as exc:
@@ -607,6 +745,7 @@ def edit_unit():
             "lon": lon,
             "lat": lat,
             "unit_type": str(data.get("unit_type", defaults["unit_type"])),
+            "aircraft_type": data.get("aircraft_type"),
             "capabilities": data.get("capabilities", []),
             "composition": data.get("composition", {}),
             "primary_weapon": primary_weapon,
@@ -652,7 +791,10 @@ def admin_edit():
                 raise APIInputError("Unit ID conflict", 409)
             current = active.units[original_id]
             candidate_data = current.to_dict()
-            for field in ("name", "faction", "icon", "unit_type", "composition", "capabilities", "primary_weapon", "stance"):
+            for field in (
+                "name", "faction", "icon", "unit_type", "aircraft_type",
+                "composition", "capabilities", "primary_weapon", "stance",
+            ):
                 if field in data:
                     candidate_data[field] = data[field]
             resource_min = float(active.rules["resources"]["minimum"])
@@ -722,24 +864,105 @@ def add_modifier():
     except APIInputError as exc:
         return api_error(exc, exc.status_code)
 
-@app.route('/api/set_influence', methods=['POST'])
-def set_influence():
+
+@app.route('/api/city', methods=['POST'])
+def edit_city():
+    """Allow Chairs to add, update, or remove city influence during play."""
     try:
         active = mounted_engine()
         data = json_object()
-        province = str(data.get('province', '')).strip()
-        if not province:
-            raise APIInputError("Province is required")
-        influence_rules = active.rules["political_influence"]
-        influence = finite_number(
-            data.get('influence', 0),
-            "Influence",
-            float(influence_rules["minimum"]),
-            float(influence_rules["maximum"]),
-        )
+        action = str(data.get("action", "upsert")).strip().lower()
+        original_id = data.get("original_id") or data.get("id")
+        try:
+            original_id = validate_identifier(original_id, "City ID")
+        except DLCValidationError as exc:
+            raise APIInputError(str(exc)) from exc
+
         with active.lock:
-            active.province_influence[province] = influence
-        return jsonify({"status": "ok"})
+            existing_index = next((index for index, city in enumerate(active.cities) if city["id"] == original_id), None)
+            if action == "delete":
+                if existing_index is None:
+                    raise APIInputError("City not found", 404)
+                removed = active.cities.pop(existing_index)
+                active.log_event(
+                    f"[Chair Override] City influence area [{removed['name']}] was removed.",
+                    faction="COMMITTEE",
+                    msg_type="system",
+                )
+                return jsonify({"status": "ok", "city": removed})
+            if action != "upsert":
+                raise APIInputError("City action must be upsert or delete")
+
+            try:
+                city = active.validate_city(data)
+            except ValueError as exc:
+                raise APIInputError(str(exc)) from exc
+            conflict = next(
+                (item for item in active.cities if item["id"] == city["id"] and item["id"] != original_id),
+                None,
+            )
+            if conflict:
+                raise APIInputError("City ID conflict", 409)
+            if existing_index is None:
+                active.cities.append(city)
+                verb = "added"
+            else:
+                active.cities[existing_index] = city
+                verb = "updated"
+            active.log_event(
+                f"[Chair Override] City [{city['name']}] {verb}: area {city['area_km2']:g} km², influence {city['influence_rate']:g}.",
+                faction="COMMITTEE",
+                msg_type="system",
+            )
+        return jsonify({"status": "ok", "city": dict(city, radius_km=active.city_radius_km(city))})
+    except APIInputError as exc:
+        return api_error(exc, exc.status_code)
+
+@app.route('/api/province_politics', methods=['POST'])
+@app.route('/api/set_influence', methods=['POST'])
+def set_province_politics():
+    try:
+        active = mounted_engine()
+        data = json_object()
+        action = str(data.get("action", "upsert")).strip().lower()
+        original_province = str(data.get("original_province") or data.get("province", "")).strip()
+        original_faction = str(data.get("original_faction") or data.get("faction", "")).strip()
+        if not original_province or not original_faction:
+            raise APIInputError("Province and faction are required")
+        with active.lock:
+            if action == "delete":
+                if not active.remove_province_politics(original_province, original_faction):
+                    raise APIInputError("Province faction record not found", 404)
+                active.log_event(
+                    f"[Chair Override] Political record for [{original_faction}] in [{original_province}] was removed.",
+                    faction="COMMITTEE",
+                    msg_type="system",
+                )
+                return jsonify({"status": "ok"})
+            if action != "upsert":
+                raise APIInputError("Province politics action must be upsert or delete")
+            try:
+                entry = active.validate_province_politics_entry(data)
+            except ValueError as exc:
+                raise APIInputError(str(exc)) from exc
+
+            is_rename = (entry["province"], entry["faction"]) != (original_province, original_faction)
+            target_state = active.province_politics.get(entry["province"], {}).get("factions", {})
+            if is_rename and entry["faction"] in target_state:
+                raise APIInputError("Province faction record already exists", 409)
+            original_exists = original_faction in active.province_politics.get(original_province, {}).get("factions", {})
+            if ("original_province" in data or "original_faction" in data) and not original_exists:
+                raise APIInputError("Original province faction record not found", 404)
+            if is_rename and original_exists:
+                active.remove_province_politics(original_province, original_faction)
+            active.set_province_politics(entry)
+            active.log_event(
+                f"[Chair Override] Civilian sentiment toward [{entry['faction']}] in [{entry['province']}] set to {entry['civilian_sentiment']:g}; occupation {entry['occupation']:g}.",
+                faction="COMMITTEE",
+                msg_type="system",
+            )
+            province_state = active.get_province_politics_state()[entry["province"]]
+        return jsonify({"status": "ok", "entry": entry, "province_state": province_state})
     except APIInputError as exc:
         return api_error(exc, exc.status_code)
 
