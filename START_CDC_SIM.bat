@@ -1,21 +1,28 @@
 @echo off
 setlocal
 cd /d "%~dp0"
+title CDC Sim
 
 if not exist ".venv\Scripts\python.exe" (
-    echo Local Python environment was not found.
-    echo Run INSTALL_OR_REPAIR.bat first, then run this file again.
+    echo CDC Sim's local developer environment was not found.
+    echo Run INSTALL_OR_REPAIR.bat first.
     pause
     exit /b 1
 )
 
+if not defined CDC_PROFILE set "CDC_PROFILE=development"
+
 echo Starting CDC Sim...
-echo.
-echo When the server is ready, open this address in a browser:
-echo http://127.0.0.1:5000
-echo.
-echo Keep this window open while committee is running.
-echo Press Ctrl+C in this window to stop the server.
+echo The readiness page will open in your browser automatically.
+echo Keep this window open while the committee is running.
+echo Press Ctrl+C here to stop the local server.
 echo.
 ".venv\Scripts\python.exe" server.py
-pause
+if errorlevel 1 (
+    echo.
+    echo CDC Sim stopped because of an error.
+    echo Open the readiness page or include the displayed Support ID in your beta report.
+    pause
+    exit /b 1
+)
+exit /b 0

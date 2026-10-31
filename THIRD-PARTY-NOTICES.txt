@@ -1,0 +1,34 @@
+CDC SIM THIRD-PARTY SOFTWARE NOTICES
+
+CDC Sim includes third-party software under licenses separate from the CDC Sim
+End User License Agreement. Those terms continue to govern their components.
+
+Browser components
+------------------
+Leaflet 1.9.4 — BSD-2-Clause
+  Full notice: _internal/static/vendor/leaflet/LICENSE
+
+JSZip 3.10.1 — MIT option selected
+  Full notice: _internal/static/vendor/jszip/LICENSE-MIT.txt
+
+pako 1.0.11 and its zlib 1.2.8 port, embedded in JSZip — MIT and zlib terms
+  Full notices:
+  _internal/static/vendor/jszip/PAKO-LICENSE-MIT.txt
+  _internal/static/vendor/jszip/PAKO-ZLIB-LICENSE.txt
+
+Python runtime components
+-------------------------
+The exact runtime dependency list and each copied license or attribution file
+are installed under:
+
+  _internal/third-party-licenses/INDEX.txt
+  _internal/third-party-licenses/<distribution-version>/
+
+This includes the complete NumPy binary-distribution notice. That notice
+documents the GCC Runtime Library Exception applicable to portions of its
+Windows numerical runtime. The exception permits qualifying proprietary
+programs; its notice does not apply the project license to CDC Sim.
+
+The release directory also contains dependency-inventory.json for the exact
+build environment. Provider URLs above identify provenance and are not runtime
+service dependencies.

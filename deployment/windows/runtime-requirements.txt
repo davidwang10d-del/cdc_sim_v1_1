@@ -1,0 +1,6 @@
+# Exact runtime inputs for the supported Windows x64 installer.
+Flask==3.0.0
+numpy==1.26.0
+Pillow==10.0.1
+rasterio==1.3.9
+waitress==3.0.2

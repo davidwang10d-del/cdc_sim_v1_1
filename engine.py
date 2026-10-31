@@ -73,6 +73,7 @@ class SimulationEngine:
         
         self.detected_units = {}
         self.detected_installations = {}
+        self._active_close_engagements = set()
         self.diplomacy = {}
         self.committee_config = self._build_committee_config()
         
@@ -251,6 +252,7 @@ class SimulationEngine:
             self.province_politics = {}
             self.detected_units = {}
             self.detected_installations = {}
+            self._active_close_engagements = set()
             self.committee_records = []
             self.cities = deepcopy(self.initial_cities)
             self.diplomacy = {}
@@ -390,7 +392,12 @@ class SimulationEngine:
                     "condition": "available",
                     "message": "Legacy checkpoint (DLC not recorded)" if not saved_dlc else "Ready to restore",
                 })
-        except (OSError, OverflowError, json.JSONDecodeError, TypeError, ValueError) as exc:
+        except OSError:
+            result.update({
+                "condition": "invalid",
+                "message": "Checkpoint could not be read",
+            })
+        except (OverflowError, json.JSONDecodeError, TypeError, ValueError) as exc:
             result.update({
                 "condition": "invalid",
                 "message": f"Invalid checkpoint: {exc}",
@@ -501,7 +508,9 @@ class SimulationEngine:
             if len({city["id"] for city in restored_cities}) != len(restored_cities):
                 raise ValueError("Save contains duplicate city IDs")
             restored_province_politics = self.validate_province_politics_state(raw_province_politics)
-        except (OSError, OverflowError, json.JSONDecodeError, TypeError, ValueError, KeyError) as exc:
+        except OSError:
+            return False, "Checkpoint could not be read"
+        except (OverflowError, json.JSONDecodeError, TypeError, ValueError, KeyError) as exc:
             return False, f"Save is invalid: {exc}"
 
         # Commit only after every field and unit has been parsed successfully.
@@ -513,6 +522,7 @@ class SimulationEngine:
             self.province_politics = restored_province_politics
             self.detected_units = detected_units
             self.detected_installations = detected_installations
+            self._active_close_engagements = set()
             self.committee_records = committee_records[-int(self.rules["state_limits"]["committee_records"]):]
             self.cities = restored_cities
             self.structured_logs = structured_logs[-int(self.rules["state_limits"]["structured_logs"]):]
@@ -2187,6 +2197,7 @@ class SimulationEngine:
 
     def combat_tick(self, delta_time_hours):
         self.detection_tick(delta_time_hours)
+        close_engagements_now = set()
 
         for u in self.units.values():
             if u.status != "BOMBARDING":
@@ -2231,17 +2242,34 @@ class SimulationEngine:
 
                 u1_can_see = self._is_detected_by(u1.faction, u2.id)
                 u2_can_see = self._is_detected_by(u2.faction, u1.id)
+                close_contact = edge_dist <= contact_distance
                 
                 # 🏔️ 3D Physics: Detect real mountain blockage between two points
                 has_los = self.map_engine.check_line_of_sight(u1.lon, u1.lat, u2.lon, u2.lat)
+                # Once formation footprints meet, both sides necessarily know
+                # about the immediate threat. Previously close-contact
+                # self-defense was enabled below, but its attack multiplier was
+                # still zero when the probabilistic detection tick had not yet
+                # succeeded. The result was overlapping hostile markers that
+                # exchanged no fire.
+                if close_contact:
+                    self._record_detection(
+                        self.detected_units, u2.id, u1.faction
+                    )
+                    self._record_detection(
+                        self.detected_units, u1.id, u2.faction
+                    )
+                    u1_can_see = True
+                    u2_can_see = True
+                effective_los = has_los or close_contact
                 
                 u1_has_indirect_at_range = u1.get_max_weapon_range({"direct_fire"}, require_indirect=True) >= edge_dist
                 u2_has_indirect_at_range = u2.get_max_weapon_range({"direct_fire"}, require_indirect=True) >= edge_dist
 
-                if not has_los and not u1_has_indirect_at_range and not u2_has_indirect_at_range:
+                if not effective_los and not u1_has_indirect_at_range and not u2_has_indirect_at_range:
                     continue
 
-                if not u1_can_see and not u2_can_see and edge_dist > contact_distance:
+                if not u1_can_see and not u2_can_see and not close_contact:
                     continue 
                     
                 order_rules = self.rules["orders"]
@@ -2277,7 +2305,7 @@ class SimulationEngine:
                     float(direct["failed_penetration_multiplier"]),
                     roles={"direct_fire"},
                     indirect_without_los_multiplier=float(direct["indirect_without_los_multiplier"]),
-                    has_line_of_sight=has_los,
+                    has_line_of_sight=effective_los,
                     engaged_personnel=eff_p1,
                 )
                 attack_profile2 = u2.calculate_weapon_attack(
@@ -2287,30 +2315,39 @@ class SimulationEngine:
                     float(direct["failed_penetration_multiplier"]),
                     roles={"direct_fire"},
                     indirect_without_los_multiplier=float(direct["indirect_without_los_multiplier"]),
-                    has_line_of_sight=has_los,
+                    has_line_of_sight=effective_los,
                     engaged_personnel=eff_p2,
                 )
                 u1_has_fire = attack_profile1["effective_attack"] > 0
                 u2_has_fire = attack_profile2["effective_attack"] > 0
 
                 u1_engages = False
-                if profile1["can_direct_combat"] and u1_has_fire and edge_dist <= contact_distance and order_rules["close_contact_self_defense"]:
+                if profile1["can_direct_combat"] and u1_has_fire and close_contact and order_rules["close_contact_self_defense"]:
                     u1_engages = True
                 elif profile1["can_direct_combat"] and u1_has_fire and u1_can_see and edge_dist <= u1.direct_fire_range:
-                    if has_los or u1_has_indirect_at_range:
+                    if effective_los or u1_has_indirect_at_range:
                         if stance1["allows_ranged_fire"] and order_allows_ranged_fire(u1):
                             u1_engages = True
                         
                 u2_engages = False
-                if profile2["can_direct_combat"] and u2_has_fire and edge_dist <= contact_distance and order_rules["close_contact_self_defense"]:
+                if profile2["can_direct_combat"] and u2_has_fire and close_contact and order_rules["close_contact_self_defense"]:
                     u2_engages = True
                 elif profile2["can_direct_combat"] and u2_has_fire and u2_can_see and edge_dist <= u2.direct_fire_range:
-                    if has_los or u2_has_indirect_at_range:
+                    if effective_los or u2_has_indirect_at_range:
                         if stance2["allows_ranged_fire"] and order_allows_ranged_fire(u2):
                             u2_engages = True
 
                 if not u1_engages and not u2_engages:
                     continue
+                engagement_key = tuple(sorted((u1.id, u2.id)))
+                if close_contact:
+                    close_engagements_now.add(engagement_key)
+                if close_contact and engagement_key not in self._active_close_engagements:
+                    self.log_event(
+                        f"⚔️ [Close Combat] {u1.name} and {u2.name} entered direct combat.",
+                        faction="SYSTEM",
+                        msg_type="combat",
+                    )
                     
                 river_crossed = self.is_crossing_river(u1, u2)
                 atk1_mult = 1.0 if u1_can_see else 0.0 
@@ -2365,8 +2402,8 @@ class SimulationEngine:
                         + max(0.0, a - d) * float(direct["overmatch_hit_coefficient"])
                     )
 
-                cover1 = self._cover_multiplier(u1, tc, indirect=(u2_indirect and not has_los))
-                cover2 = self._cover_multiplier(u2, tc, indirect=(u1_indirect and not has_los))
+                cover1 = self._cover_multiplier(u1, tc, indirect=(u2_indirect and not effective_los))
+                cover2 = self._cover_multiplier(u2, tc, indirect=(u1_indirect and not effective_los))
                 casualty_time_multiplier = float(direct["casualty_time_multiplier"])
                 h2 = calc_hits(final_atk1, def2) * delta_time_hours * casualty_time_multiplier * cover2
                 h1 = calc_hits(final_atk2, def1) * delta_time_hours * casualty_time_multiplier * cover1
@@ -2387,6 +2424,7 @@ class SimulationEngine:
                     self.log_event(f"[Unit Neutralized] {u2.name} is no longer combat effective.", faction=u2.faction, msg_type="combat")
 
         self._resolve_installation_direct_fire(delta_time_hours)
+        self._active_close_engagements = close_engagements_now
 
     def run_clock(self):
         last_time = time.time()

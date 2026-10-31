@@ -8,7 +8,7 @@ prevents a malformed package from partially replacing a running committee.
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import json
 import math
 from pathlib import Path
@@ -16,6 +16,9 @@ import re
 from typing import Any
 
 from doctrine import CORE_RULE_SECTIONS, get_core_doctrine
+from scenario_package import (
+    ScenarioPackageError, empty_events, empty_objectives, load_package_extensions, read_json_document,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -52,6 +55,9 @@ class DLCPackage:
     battalions: dict[str, dict[str, Any]]
     rules: dict[str, Any]
     source_rules: dict[str, Any]
+    manifest: dict[str, Any] | None = None
+    objectives: dict[str, Any] = field(default_factory=empty_objectives)
+    events: dict[str, Any] = field(default_factory=empty_events)
 
 
 def validate_identifier(value: Any, label: str = "ID") -> str:
@@ -62,9 +68,9 @@ def validate_identifier(value: Any, label: str = "ID") -> str:
     return value
 
 
-def resolve_dlc_path(dlc_id: Any) -> Path:
+def resolve_dlc_path(dlc_id: Any, root: Path | str | None = None) -> Path:
     safe_id = validate_identifier(dlc_id, "DLC ID")
-    root = DLC_ROOT.resolve()
+    root = Path(DLC_ROOT if root is None else root).resolve()
     candidate = (root / safe_id).resolve()
     try:
         candidate.relative_to(root)
@@ -100,9 +106,8 @@ def _json_object(path: Path, label: str) -> dict[str, Any]:
     if not path.is_file():
         raise DLCValidationError(f"Missing required {label}: {path.name}")
     try:
-        with path.open("r", encoding="utf-8") as handle:
-            value = json.load(handle)
-    except (OSError, json.JSONDecodeError) as exc:
+        value = read_json_document(path.parent, path.name)
+    except (OSError, ScenarioPackageError) as exc:
         raise DLCValidationError(f"Cannot read {label}: {exc}") from exc
     if not isinstance(value, dict):
         raise DLCValidationError(f"{label} must contain a JSON object")
@@ -114,7 +119,7 @@ def _finite_number(value: Any, label: str, *, minimum: float | None = None, maxi
         raise DLCValidationError(f"{label} must be a number")
     try:
         number = float(value)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise DLCValidationError(f"{label} must be a number") from exc
     if not math.isfinite(number):
         raise DLCValidationError(f"{label} must be finite")
@@ -1294,11 +1299,26 @@ def _validate_units(
             errors.append(f"Unit [{unit_id}] references unknown aircraft type [{aircraft_type}]")
 
 
-def load_dlc_package(dlc_id: Any) -> DLCPackage:
-    directory = resolve_dlc_path(dlc_id)
-    scenario = deepcopy(_json_object(directory / "scenario.json", "scenario.json"))
-    weapons = deepcopy(_json_object(directory / "weapons.json", "weapons.json"))
-    battalions = deepcopy(_json_object(directory / "battalions.json", "battalions.json"))
+def load_dlc_package(dlc_id: Any, root: Path | str | None = None) -> DLCPackage:
+    return load_dlc_directory(resolve_dlc_path(dlc_id, root), dlc_id)
+
+
+def load_dlc_directory(directory: Path | str, dlc_id: str | None = None) -> DLCPackage:
+    """Validate an explicitly selected authoring directory without mounting it."""
+    directory = Path(directory).resolve()
+    if not directory.is_dir():
+        raise DLCValidationError("Scenario directory does not exist")
+    if dlc_id is None and (directory / "package.json").is_file():
+        try:
+            manifest_identity = read_json_document(directory, "package.json").get("id")
+        except (ScenarioPackageError, OSError) as exc:
+            raise DLCValidationError(str(exc)) from exc
+        dlc_id = validate_identifier(manifest_identity, "Package ID")
+    else:
+        dlc_id = validate_identifier(dlc_id or directory.name, "DLC ID")
+    scenario = deepcopy(_json_object(_safe_child(directory, "scenario.json", "scenario.json", "file"), "scenario.json"))
+    weapons = deepcopy(_json_object(_safe_child(directory, "weapons.json", "weapons.json", "file"), "weapons.json"))
+    battalions = deepcopy(_json_object(_safe_child(directory, "battalions.json", "battalions.json", "file"), "battalions.json"))
     errors: list[str] = []
 
     if not str(scenario.get("scenario_name", "")).strip():
@@ -1343,6 +1363,18 @@ def load_dlc_package(dlc_id: Any) -> DLCPackage:
     if errors:
         raise DLCValidationError(errors)
 
+    try:
+        manifest, objectives, events = load_package_extensions(directory, scenario, units, rules)
+    except (ScenarioPackageError, OSError) as exc:
+        raise DLCValidationError(str(exc)) from exc
+    if manifest is not None:
+        # The engine already exposes committee content; these cards do not execute.
+        scenario["committee"]["package_metadata"] = {
+            key: manifest[key] for key in ("id", "version", "name", "description", "publisher", "license")
+        }
+        scenario["committee"]["objectives"] = deepcopy(objectives["objectives"])
+        scenario["committee"]["events"] = deepcopy(events["events"])
+
     return DLCPackage(
         dlc_id=str(dlc_id),
         directory=directory,
@@ -1353,15 +1385,19 @@ def load_dlc_package(dlc_id: Any) -> DLCPackage:
         battalions=battalions,
         rules=rules,
         source_rules=source_rules,
+        manifest=manifest,
+        objectives=objectives,
+        events=events,
     )
 
 
-def scan_dlcs() -> list[dict[str, Any]]:
-    if not DLC_ROOT.is_dir():
+def scan_dlcs(root: Path | str | None = None) -> list[dict[str, Any]]:
+    root = Path(DLC_ROOT if root is None else root).resolve()
+    if not root.is_dir():
         return []
 
     results: list[dict[str, Any]] = []
-    for directory in sorted((path for path in DLC_ROOT.iterdir() if path.is_dir()), key=lambda path: path.name.lower()):
+    for directory in sorted((path for path in root.iterdir() if path.is_dir()), key=lambda path: path.name.lower()):
         if directory.name.startswith("_"):
             continue
         entry: dict[str, Any] = {
@@ -1375,7 +1411,9 @@ def scan_dlcs() -> list[dict[str, Any]]:
             scenario = _json_object(directory / "scenario.json", "scenario.json")
             entry["name"] = str(scenario.get("scenario_name", directory.name))
             entry["desc"] = str(scenario.get("description", "No background briefing data."))
-            load_dlc_package(directory.name)
+            package = load_dlc_package(directory.name, root)
+            if package.manifest is not None:
+                entry.update({"package_id": package.manifest["id"], "version": package.manifest["version"], "publisher": package.manifest["publisher"]})
             entry["valid"] = True
         except DLCValidationError as exc:
             entry["errors"] = exc.errors

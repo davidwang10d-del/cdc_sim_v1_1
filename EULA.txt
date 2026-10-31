@@ -1,0 +1,144 @@
+CDC SIM END USER LICENSE AGREEMENT
+FUTURE PRIVATE BETA / COMMERCIAL DRAFT — LEGAL REVIEW REQUIRED; NOT THE CURRENT PUBLIC GPL RELEASE
+
+Effective date: [EFFECTIVE DATE]
+Licensor: [LICENSOR LEGAL NAME]
+Support contact: [SUPPORT CONTACT]
+
+THIS DRAFT HAS NOT BEEN APPROVED FOR EXTERNAL DISTRIBUTION. IT MUST BE REVIEWED AND COMPLETED BY QUALIFIED COUNSEL AND THE LICENSOR BEFORE USE WITH CUSTOMERS.
+
+This End User License Agreement (the “Agreement”) governs access to and use of the CDC Sim software, documentation, updates, and any scenario packages supplied under an order form, beta invitation, statement of work, or other written authorization (collectively, the “Product”). By installing, launching, copying, or using the Product, the organization or individual accepting this Agreement (“Customer”) agrees to its terms. If the individual accepting this Agreement acts for an organization, that individual represents that they have authority to bind that organization.
+
+1. DEFINITIONS
+
+“Authorized User” means a Customer employee, contractor, volunteer, chair, crisis staff member, delegate, or participant whom Customer permits to use the Product for an authorized event or internal evaluation.
+
+“Customer Content” means scenarios, maps, unit data, political settings, objectives, event text, briefings, participant information, checkpoints, exports, and other material supplied or created by Customer or its Authorized Users.
+
+“Documentation” means the user guides, release notes, scenario-package specifications, and installation instructions supplied with the Product.
+
+“Scenario Pack” means a separately versioned package of data and media used by the simulation engine. Scenario Packs do not include executable code unless the Licensor expressly agrees otherwise in writing.
+
+2. LIMITED LICENSE GRANT
+
+Subject to payment of applicable fees and compliance with this Agreement and the applicable order or beta invitation, Licensor grants Customer a limited, revocable, non-exclusive, non-transferable, non-sublicensable license during the applicable term to install and use the authorized build of the Product for Customer’s internal educational activities, Model United Nations events, crisis simulations, demonstrations, training, and evaluation.
+
+The number of installations, organizations, events, Authorized Users, and Scenario Packs permitted is defined by the applicable written order or beta invitation. No exclusivity is granted. Licensor may license the Product and related scenarios to other organizations.
+
+A private-beta license is for evaluation only and does not authorize production deployment, resale, public hosting, or use outside the invited organization unless Licensor gives written permission.
+
+3. SCENARIO PACKS
+
+Each Scenario Pack is licensed separately under the applicable order, pack notice, or written authorization. Purchasing or receiving one Scenario Pack does not grant access to other packs. Customer may create Customer Content using the documented data-only scenario format without modifying the simulation engine.
+
+Customer may make reasonable working copies of an authorized Scenario Pack solely for backup and use with the Product. Customer may not redistribute, publish, sell, sublicense, extract for use in another product, or provide an authorized Scenario Pack to another organization unless the applicable pack terms expressly allow it.
+
+Customer-specific Scenario Packs may include additional ownership, confidentiality, support, and delivery terms in a statement of work. If a Scenario Pack includes third-party maps, data, images, or other material, the applicable third-party notices and use limits continue to apply.
+
+4. RESTRICTIONS
+
+Except to the extent a restriction is prohibited by applicable law or an applicable third-party license, Customer may not:
+
+(a) copy, distribute, rent, lease, lend, sell, sublicense, publish, or make the Product available to an unauthorized person or organization;
+(b) modify, translate, adapt, or create derivative works of the engine, backend, installer, or supplied interface;
+(c) reverse engineer, decompile, disassemble, decrypt, extract, or otherwise attempt to discover source code, non-public algorithms, signing material, or security controls;
+(d) remove or alter copyright, trademark, attribution, confidentiality, license, or proprietary notices;
+(e) bypass or interfere with technical limits, package validation, access controls, signatures, or usage restrictions;
+(f) use the Product to build, train, benchmark, or operate a competing simulation product or commercial service without written permission;
+(g) introduce malicious code, executable content inside a Scenario Pack, or material that disrupts the Product or another system;
+(h) use third-party map, data, or API resources through the Product without the permissions, account terms, and attribution required by their owners; or
+(i) use the Product in violation of law, sanctions, export controls, school policies, event rules, or the rights of another person.
+
+5. OWNERSHIP AND RESERVATION OF RIGHTS
+
+As between Licensor and Customer, and subject to third-party rights, Licensor retains all right, title, and interest in the Product, including its engine, interfaces, documentation, formats, updates, and Licensor-authored Scenario Packs. Customer receives only the limited rights expressly granted by this Agreement. No rights are granted by implication, estoppel, or exhaustion beyond those required by applicable law.
+
+Customer retains ownership of Customer Content. Customer grants Licensor only the limited rights reasonably necessary to host, process, reproduce, troubleshoot, support, migrate, or back up Customer Content when Customer asks Licensor to provide those services. The current local private-beta build does not automatically transmit Customer Content or operational telemetry to Licensor.
+
+Feedback is voluntary. Customer grants Licensor a worldwide, perpetual, irrevocable, royalty-free right to use feedback about the Product without identifying Customer or disclosing Customer Content.
+
+6. CUSTOMER CONTENT AND RESPONSIBILITIES
+
+Customer is responsible for the accuracy, legality, permissions, and appropriate use of Customer Content. Customer must obtain all required rights for maps, datasets, names, logos, images, briefings, and personal information that it adds to the Product. Customer must not include credentials, classified information, unlawfully obtained information, or content that it is not authorized to process.
+
+Customer is responsible for selecting appropriate Authorized Users, controlling access to the computer and backups, saving checkpoints, exporting backups, and testing a scenario before a live event. Customer must retain independent copies of important Customer Content and backups.
+
+The Product is an educational and entertainment simulation. It is not designed or warranted for real-world military operations, emergency response, weapons employment, safety-critical decisions, legal advice, political forecasting, or protection of life or property.
+
+7. LOCAL DATA, PRIVACY, AND SUPPORT MATERIAL
+
+The local build stores configuration, checkpoints, logs, diagnostics, and backups on the Customer-controlled device as described in the Documentation. It does not include automatic customer verification, account activation, license-server communication, analytics upload, or crash-report upload.
+
+If Customer voluntarily provides logs, diagnostics, backups, or Customer Content for support, Customer authorizes Licensor to use that material only to provide support, maintain security, investigate defects, and improve the Product, subject to any applicable privacy notice or written support terms. Customer should review support material before sending it and should remove information that is not needed for diagnosis.
+
+Future hosted, account-based, telemetry, or licensing features require separate notice and, where required, consent or additional terms.
+
+8. THIRD-PARTY COMPONENTS
+
+The Product may include third-party software, data, or assets governed by separate license terms and notices. Those terms apply to the applicable components and prevail over conflicting terms in this Agreement to the extent required by the third-party license. The Product’s third-party notices do not grant Customer rights to unrelated third-party services, APIs, tile servers, datasets, or content.
+
+Customer may review the third-party notices supplied with the installed Product. Customer may not remove those notices. Licensor does not claim ownership of third-party components or Customer Content.
+
+9. BETA AND PRE-RELEASE SOFTWARE
+
+A build identified as alpha, beta, preview, evaluation, QA, or pre-release may be incomplete, contain defects, change without notice, and be unsuitable for production use. Customer will test it in a controlled environment, avoid relying on it as the sole copy of important data, and report material defects through the designated support channel.
+
+Licensor may set an evaluation period, discontinue a beta, replace a build, or require installation of a corrected build. Licensor will use reasonable efforts to avoid interrupting a live committee, but Customer remains responsible for event contingency planning and current backups.
+
+10. UPDATES, COMPATIBILITY, AND SUPPORT
+
+Licensor may provide corrections, updates, replacement installers, documentation changes, or new versions. Unless an order states otherwise, this Agreement applies to updates supplied under the same license. New major versions, hosted services, enterprise deployments, or additional Scenario Packs may require separate fees and terms.
+
+Customer must verify version and scenario compatibility before restoring a checkpoint or replacing an installed build. Support scope, response times, maintenance periods, and supported operating systems are defined in the applicable order, beta invitation, or Documentation. Licensor is not obligated to support modified builds, unsupported systems, unapproved Scenario Packs, or use contrary to the Documentation.
+
+11. CONFIDENTIALITY
+
+Non-public builds, documentation, pricing, roadmaps, security information, and Licensor-provided private scenarios may be confidential information. Customer will protect them using at least reasonable care and will disclose them only to Authorized Users who need access and are bound by appropriate duties. This section does not cover information that Customer can document was lawfully public without breach, already known without restriction, independently developed, or rightfully received from another source.
+
+Customer Content identified as confidential remains Customer confidential information. Any additional confidentiality duties in an order form, nondisclosure agreement, or statement of work continue to apply.
+
+12. DISCLAIMER OF WARRANTIES
+
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, BETA AND EVALUATION BUILDS ARE PROVIDED “AS IS” AND “AS AVAILABLE,” WITH ALL FAULTS. LICENSOR DISCLAIMS ALL EXPRESS, IMPLIED, AND STATUTORY WARRANTIES, INCLUDING MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, NON-INFRINGEMENT, ACCURACY, AVAILABILITY, SECURITY, AND ERROR-FREE OPERATION. LICENSOR DOES NOT WARRANT THAT SIMULATION RESULTS REPRESENT REAL EVENTS OR THAT THE PRODUCT WILL MEET CUSTOMER’S REQUIREMENTS.
+
+Some jurisdictions do not allow certain warranty exclusions. In those jurisdictions, the exclusions apply only to the extent permitted by law.
+
+13. LIMITATION OF LIABILITY
+
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, NEITHER LICENSOR NOR ITS SUPPLIERS WILL BE LIABLE FOR INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, PUNITIVE, OR CONSEQUENTIAL DAMAGES; LOSS OF DATA, REVENUE, PROFITS, GOODWILL, OR BUSINESS OPPORTUNITY; EVENT INTERRUPTION; OR THE COST OF SUBSTITUTE SERVICES, EVEN IF ADVISED THAT SUCH DAMAGE IS POSSIBLE.
+
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE AGGREGATE LIABILITY OF LICENSOR AND ITS SUPPLIERS ARISING FROM OR RELATING TO THE PRODUCT OR THIS AGREEMENT WILL NOT EXCEED THE GREATER OF (A) THE AMOUNT CUSTOMER PAID FOR THE AFFECTED PRODUCT DURING THE TWELVE MONTHS BEFORE THE EVENT GIVING RISE TO LIABILITY OR (B) USD 100. THIS LIMIT DOES NOT APPLY WHERE APPLICABLE LAW PROHIBITS IT.
+
+14. TERM AND TERMINATION
+
+This Agreement begins when Customer first accepts, installs, or uses the Product and continues for the term stated in the applicable order or beta invitation. Licensor may terminate the Agreement for material breach if Customer does not cure the breach within a reasonable written cure period, or immediately where continued use would create a material security, legal, or intellectual-property risk.
+
+On expiration or termination, Customer must stop using and delete the Product and Licensor-supplied Scenario Packs, except for archival copies required by law. Termination does not transfer ownership of Customer Content. Where technically available and legally permitted, Customer may retain exported Customer Content and checkpoints for recordkeeping, but may need a valid Product license to reopen them.
+
+Sections concerning restrictions, ownership, confidentiality, third-party terms, warranty disclaimers, liability, termination effects, and general terms survive termination.
+
+15. EXPORT, SANCTIONS, AND REGULATORY COMPLIANCE
+
+Customer will comply with applicable export-control, sanctions, anti-corruption, privacy, education, and procurement laws. Customer represents that it and its Authorized Users are not prohibited from receiving the Product. Customer will not use or transfer the Product for prohibited end uses or destinations.
+
+16. GOVERNING LAW AND DISPUTES
+
+This Agreement is governed by the laws of [GOVERNING LAW AND JURISDICTION], without regard to conflict-of-law rules. The courts or dispute process specified in the applicable order will have exclusive jurisdiction, unless applicable law requires otherwise. The United Nations Convention on Contracts for the International Sale of Goods does not apply.
+
+17. GENERAL TERMS
+
+This Agreement, together with the applicable order, beta invitation, third-party notices, and referenced policies, is the complete agreement concerning the Product and supersedes prior proposals or communications on that subject. If terms conflict, the signed order controls for commercial scope, applicable third-party terms control for their components, and this Agreement controls for the Product generally.
+
+Customer may not assign this Agreement without Licensor’s written consent, except as part of a permitted merger or sale of substantially all relevant assets where the successor accepts these terms. Licensor may assign this Agreement as part of a reorganization, financing, merger, or transfer of the Product business.
+
+If any provision is unenforceable, it will be adjusted to the minimum extent necessary and the remaining provisions will continue. Failure to enforce a provision is not a waiver. Headings are for convenience. Electronic acceptance and copies are effective as originals.
+
+18. CONTACT
+
+Questions, notices, and support requests should be sent to:
+
+[LICENSOR LEGAL NAME]
+[LICENSOR ADDRESS]
+[SUPPORT CONTACT]
+
+END OF DRAFT END USER LICENSE AGREEMENT

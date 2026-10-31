@@ -113,6 +113,19 @@ class EngineRegressionTests(unittest.TestCase):
         self.assertEqual(metadata["condition"], "invalid")
         self.assertFalse(metadata["can_load"])
 
+    def test_checkpoint_os_errors_do_not_disclose_storage_paths(self):
+        checkpoint = Path(self.temp_dir.name) / "save_private.json"
+        checkpoint.write_text("{}", encoding="utf-8")
+        private_path = str(checkpoint.resolve())
+        with patch("builtins.open", side_effect=OSError(f"access denied: {private_path}")):
+            loaded, message = self.sim.load_game("private")
+            metadata = self.sim.save_slot_metadata("private")
+        self.assertFalse(loaded)
+        self.assertEqual(message, "Checkpoint could not be read")
+        self.assertEqual(metadata["message"], "Checkpoint could not be read")
+        self.assertNotIn(private_path, message)
+        self.assertNotIn(private_path, metadata["message"])
+
     def test_manual_save_records_clear_checkpoint_metadata(self):
         self.sim.game_hours = 26.5
         filename = self.sim.save_game("slot_1")
@@ -393,6 +406,31 @@ class EngineRegressionTests(unittest.TestCase):
         politics = self.sim.province_politics["Test Province"]
         self.assertIn(first.faction, politics["factions"])
         self.assertGreater(politics["factions"][first.faction]["occupation"], 0.0)
+
+    def test_close_hostile_armies_auto_acquire_contact_and_exchange_fire(self):
+        first, second = list(self.sim.units.values())[:2]
+        first.lon = second.lon = 0.0
+        first.lat = second.lat = 0.0
+        first.status = second.status = "MOVING"
+        first.set_order_role("relocate")
+        second.set_order_role("relocate")
+        self.sim.detected_units.clear()
+        personnel_before = (first.personnel, second.personnel)
+
+        # Prevent the probabilistic sensor pass from acquiring either unit.
+        # Physical close contact must still trigger self-defense for both.
+        with patch.object(self.sim, "_try_detect", return_value=None):
+            self.sim.combat_tick(0.1)
+            self.sim.combat_tick(0.1)
+
+        self.assertLess(first.personnel, personnel_before[0])
+        self.assertLess(second.personnel, personnel_before[1])
+        self.assertTrue(self.sim._is_detected_by(first.faction, second.id))
+        self.assertTrue(self.sim._is_detected_by(second.faction, first.id))
+        self.assertEqual(
+            sum("[Close Combat]" in entry["message"] for entry in self.sim.structured_logs),
+            1,
+        )
 
     def test_moving_army_is_reported_in_live_province_politics_while_paused(self):
         first, *others = list(self.sim.units.values())
@@ -1886,11 +1924,17 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("setTargetingMode('relocate')", self.javascript)
         self.assertNotIn("setTargetingMode('move')", self.javascript)
 
-    def test_default_basemap_is_local_and_remote_layers_need_no_api_key(self):
+    def test_province_click_does_not_draw_a_focus_rectangle(self):
+        self.assertIn("className: 'province-boundary'", self.javascript)
+        self.assertIn("#map .province-boundary:focus", self.styles)
+        self.assertIn("outline: none !important", self.styles)
+
+    def test_default_basemap_is_local_and_has_no_external_tile_services(self):
         self.assertIn("createLocalGridBasemap", self.javascript)
-        self.assertNotIn("basemaps.cartocdn.com", self.javascript)
-        self.assertIn("https://tile.openstreetmap.org/{z}/{x}/{y}.png", self.javascript)
-        self.assertIn("local Clean fallback is active", self.javascript)
+        self.assertIn("const localBasemap", self.javascript)
+        self.assertNotIn("L.tileLayer", self.javascript)
+        self.assertNotIn("openstreetmap.org", self.javascript.lower())
+        self.assertNotIn("arcgisonline.com", self.javascript.lower())
 
     def test_paused_relocation_is_shown_as_queued_with_a_run_control(self):
         self.assertIn("ORDER QUEUED — TIMELINE PAUSED", self.javascript)
@@ -1910,11 +1954,11 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn('id="draft-instruction"', self.index)
 
     def test_tactical_panel_displays_morale(self):
-        self.assertIn('<span class="data-label">Morale:</span>', self.javascript)
+        self.assertIn("uiText('Morale:', '士气：')", self.javascript)
         self.assertIn('class="morale-meter"', self.javascript)
 
     def test_tactical_panel_displays_current_alive_personnel(self):
-        self.assertIn('<span class="data-label">Personnel Alive:</span>', self.javascript)
+        self.assertIn("uiText('Personnel Alive:', '当前兵力：')", self.javascript)
         self.assertIn('Math.floor(Number(u.personnel))', self.javascript)
         self.assertNotIn('combat_effective_personnel', self.javascript)
         self.assertNotIn('combat_readiness', self.javascript)
@@ -1944,7 +1988,8 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("Armor Gen", self.javascript)
         self.assertIn("range_bands", self.editor)
         self.assertIn("armor_generation", self.editor)
-        self.assertIn("Mounted weapon groups per battalion", self.editor)
+        self.assertIn("Mounted Weapon Groups per Battalion", self.editor)
+        self.assertIn("每营配属武器组", self.editor)
         self.assertNotIn('batInput(id,"soft"', self.editor)
 
     def test_military_targets_have_persistent_markers_selection_and_one_click_targeting(self):
@@ -1956,12 +2001,23 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("selected-installation", self.styles)
         self.assertIn("Military Target", self.javascript)
 
+    def test_nearby_unit_and_installation_icons_use_a_five_kilometer_chooser(self):
+        self.assertIn("const NEARBY_SELECTION_RADIUS_KM = 5", self.javascript)
+        self.assertIn("buildNearbyMapSelectionCandidates", self.javascript)
+        self.assertIn("handleSelectableMarkerClick('unit', uid, e)", self.javascript)
+        self.assertIn("handleSelectableMarkerClick('installation', installationId, event)", self.javascript)
+        self.assertIn('id="nearby-selection-panel"', self.index)
+        self.assertIn('id="nearby-selection-list"', self.index)
+        self.assertIn(".nearby-selection-option", self.styles)
+        self.assertIn("z-index: 1110", self.styles)
+        self.assertIn("mapClickHandler({latlng:", self.javascript)
+
     def test_construction_ui_distinguishes_persistent_sites_from_temporary_fieldworks(self):
         self.assertIn("Build at Current Position", self.javascript)
         self.assertIn("startInstallationConstruction", self.javascript)
         self.assertIn("Fortify</strong> only prepares temporary fieldworks", self.javascript)
         self.assertIn("installation_cover_bonus", self.javascript)
-        self.assertIn("Military Targets / 军事目标", self.editor)
+        self.assertIn('data-en="9. Military Targets" data-zh="9. 军事目标"', self.editor)
         self.assertIn("renderInstallations", self.editor)
         self.assertIn("scenario.military_installations", self.editor)
 

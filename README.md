@@ -4,7 +4,9 @@ Beginner-safe English manual | [中文说明](README_zh.md)
 
 CDC Sim is a browser-based military and political simulation engine for Model United Nations crisis committees. A chair mounts a scenario, moves units on a map, resolves combat and support missions, records crisis rulings, manages political control, saves checkpoints, and exports situation reports.
 
-> **Read this before doing anything:** in this project, **DLC means a local scenario folder**. It is not a paid add-on, it does not come from Steam, and no account or product key is required. At least one valid DLC is required before the simulator can open the tactical dashboard. The repository includes the playable `afghan` package and a hidden `_template` package for building your own scenario.
+**Release status:** The version already available from the [public GitHub repository](https://github.com/davidwang10d-del/cdc_sim_v1) is free to download under its existing GPLv3 license. David the Hedgehog is the public maintainer name. Commercial licensing and paid scenario packs are future plans; the local QA installer and draft EULA below are not the terms of the current public release and have not been uploaded.
+
+> **Scenario packs:** DLC is the current runtime name for a local scenario folder. Versioned packs can now contain metadata, objectives and event cards alongside their map, forces, weapons and political settings. See the [scenario pack authoring guide](docs/scenarios/scenario-pack-format.md) for editor and build instructions. Payment and entitlement services are not implemented yet. The hidden `_template` supplies the neutral authoring starter; a playable pack is required to open the tactical dashboard.
 
 The project follows one strict boundary:
 
@@ -13,74 +15,46 @@ The project follows one strict boundary:
 - Tactical orders and combat stances are defined once in **doctrine.py**. A DLC cannot redefine them.
 - The core does not invent missing scenario combat or mission tuning. An incomplete or incompatible DLC is rejected before it can replace a running committee.
 
-## What you need
+## Private beta
 
-Use this exact setup unless you already know how to manage Python environments.
+Invited testers should receive a signed Windows installer named `CDC-Sim-Setup-<version>-win-x64.exe`. The installer provides the intended **Download -> Install -> Launch -> Play** flow and does not require Python, a command prompt, this repository, or manual dependency installation.
 
-| Requirement | What to use | Why |
-| --- | --- | --- |
-| Computer | 64-bit Windows 10 or Windows 11 | The included one-click `.bat` files are for Windows. |
-| Python | **64-bit Python 3.12.x** | The installer explicitly requests Python 3.12, and the pinned NumPy/Rasterio/Pillow packages may not install on Python 3.13 or 3.14. “A newer Python” is not automatically compatible. |
-| Browser | Current Edge, Chrome, or Firefox | The user interface runs in a browser, but the simulation stays on your computer. |
-| Internet during installation | Required | `pip` must download the packages in `requirements.txt`. |
-| Internet while using the dashboard | Required by the current default UI | Leaflet, map tiles, and the editor's JSZip library are loaded from CDNs. The simulation server itself is local. |
-| Free disk space | Allow at least 1 GB | The local Python environment is roughly 200 MB; optional GIS files can add hundreds of MB. |
-| Administrator access | Usually not required | Python must already be installed, but CDC Sim itself installs packages only inside this project. |
+The repository contains the local release workflow; it is not itself a released beta installer. Before sending a build, complete the signing, malware scan, distribution-rights review, and clean-Windows acceptance gates in the [product quality priorities](docs/beta/product-quality-priorities.md). Testers should follow the [private beta tester guide](docs/beta/beta-tester-guide.md).
 
-The Python dependencies are Flask 3.0.0, NumPy 1.26.0, Pillow 10.0.1, Rasterio 1.3.9, Requests 2.31.0, and Matplotlib 3.8.0. Do not install them one by one; the installer does that for you.
+The packaged application opens a readiness page, reports its version, stores customer data below `%LOCALAPPDATA%\CDC Sim`, and keeps scenario content separate from the engine and committee checkpoints. Leaflet and JSZip are bundled locally. The packaged local map and normal chair controls launch without a map-service account or network tile provider.
 
-## First installation: exact Windows steps
+Commercial artifacts display [EULA.txt](EULA.txt) and deliberately exclude the repository's historical `LICENSE` file. That packaging choice does not erase rights already granted in older public copies; ownership and relicensing authority must be cleared before any proprietary external beta.
 
-1. Download or copy the **entire** CDC Sim project folder. Do not copy only the two `.bat` files. Do not place the files inside another program's installation directory.
-2. Install **64-bit Python 3.12.x** from [python.org](https://www.python.org/downloads/). In the Python installer, enable **Add python.exe to PATH**. Installing the Python launcher (`py.exe`) is also recommended.
-3. Open the CDC Sim folder in File Explorer. You should see `INSTALL_OR_REPAIR.bat`, `START_CDC_SIM.bat`, `server.py`, `requirements.txt`, and the `dlc` folder in the same directory.
-4. Double-click `INSTALL_OR_REPAIR.bat`.
-5. If Windows SmartScreen appears, verify that you opened the file from this project, then choose **More info → Run anyway** only if you trust your copy.
-6. Keep the black installer window open. It creates `.venv`, upgrades its packaging tools, installs `requirements.txt`, and runs `pip check`. This may take several minutes.
-7. Installation succeeded only when the last visible message says `Install/repair complete.` If the window reports an error, read [Troubleshooting](#troubleshooting) before continuing.
-8. Press any key to close the installer window.
+Source users and contributors can still use `INSTALL_OR_REPAIR.bat` and `START_CDC_SIM.bat`. Those files are development conveniences, not the tester distribution path, and require 64-bit Python 3.12. See [Manual install and startup](#manual-install-and-startup).
 
-Nothing is installed globally by the batch file. All Python packages go into the project's `.venv` folder. Re-running `INSTALL_OR_REPAIR.bat` is the normal repair procedure and does not delete DLCs or saves.
+## First beta launch
 
-## First launch: exact steps
+1. Install the signed beta supplied through the private test channel.
+2. Open **CDC Sim** from its Windows shortcut and keep its control window open.
+3. Wait for the readiness page to open automatically. Confirm the expected product version, writable customer storage, and at least one ready scenario.
+4. Choose **Open CDC Sim**, then select an available scenario.
+5. Confirm `[ PAUSED ]` is visible. Open **Saves** and create Checkpoint 1 before issuing orders.
 
-1. Double-click `START_CDC_SIM.bat`.
-2. A black server window opens. **Leave it open for the entire session.** Closing it stops CDC Sim.
-3. Wait until the window shows the Flask server address. The batch file does not open a browser automatically.
-4. Open your browser and enter [http://127.0.0.1:5000/status](http://127.0.0.1:5000/status) exactly. `127.0.0.1` means “this computer.” It is not a public website.
-5. Confirm the page says **Ready for committee use**. It must show no missing Python packages, at least one ready DLC, and zero invalid DLCs. A missing optional GIS layer is not an invalid DLC.
-6. Click **Open dashboard**, or open [http://127.0.0.1:5000](http://127.0.0.1:5000).
-7. On **AVAILABLE CAMPAIGN DLCs**, click the desired valid scenario—normally `afghan` for the included campaign. `_template` is intentionally hidden because folders beginning with `_` are builder/support packages.
-8. Wait for the tactical map and units to appear. Red GIS warnings mean a configured file could not be read; amber `OFF · DEFAULT` entries mean the documented safe fallback is being used.
-9. Confirm `[ PAUSED ]` is visible. Open **Saves**, then click **Save here** under **Checkpoint 1**. This creates a clean starting checkpoint before anyone issues an order.
+Mounting a scenario always starts from its authored state. To continue earlier work, mount the same scenario and explicitly restore a compatible checkpoint. Before stopping or upgrading, pause, save a checkpoint, and download an external backup. Closing the browser does not save the committee.
 
-If the browser says it cannot connect, the server window is closed, still starting, or port 5000 is already occupied.
+## Commercialization documents
 
-## Every later launch and safe shutdown
-
-To start again:
-
-1. Double-click `START_CDC_SIM.bat`.
-2. Keep the black server window open.
-3. Open the dashboard URL.
-4. Mount the DLC you want. Mounting always loads that DLC's authored starting state; it does **not** automatically restore yesterday's work.
-5. Open **Saves** and click **Restore** on the checkpoint you want. Restoring always pauses the simulation.
-
-To stop safely:
-
-1. Click **Pause**.
-2. Open **Saves** and save or overwrite the intended checkpoint.
-3. Optionally open **MUN** and export a final SITREP.
-4. Return to the black server window and press `Ctrl+C`.
-5. Close the browser tab. Never assume that closing the browser saved anything.
+- [Existing-file map and proposed ownership](docs/architecture/repository-file-map.md)
+- [Incremental repository migration plan](docs/architecture/commercial-migration-plan.md)
+- [Licensing-ready product, packaging, update, and deployment architecture](docs/architecture/licensing-ready-architecture.md)
+- [Accepted private-beta runtime decision](docs/architecture/adr-0001-private-beta-runtime.md)
+- [Engineering license and IP risk report](docs/commercial/license-ip-risk-report.md)
+- [Scenario-pack authoring and distribution contract](docs/scenarios/scenario-pack-format.md)
+- [Private-beta product quality priorities and release gates](docs/beta/product-quality-priorities.md)
+- [Windows executable and installer workflow](deployment/windows/README.md)
 
 ## Main pages
 
 | Address | Purpose |
 | --- | --- |
 | http://127.0.0.1:5000 | Chair/CDC tactical dashboard |
-| http://127.0.0.1:5000/status | Dependency and package readiness check |
-| http://127.0.0.1:5000/editor | DLC builder |
+| http://127.0.0.1:5000/status | Runtime and scenario readiness check |
+| http://127.0.0.1:5000/editor | Scenario builder |
 | http://127.0.0.1:5000/chair_guide | English chair guide |
 | http://127.0.0.1:5000/chair_guide_zh | Chinese chair guide |
 
@@ -91,9 +65,9 @@ Use [http://127.0.0.1:5000/zh](http://127.0.0.1:5000/zh) to open the main dashbo
 ### Before a DLC is mounted
 
 - **English / 中文** changes the dashboard language and reloads the page.
-- **DLC Builder** opens the editor in a new tab. It does not mount or install the exported DLC for you.
+- **Scenario Builder** opens the editor in a new tab. It does not mount or install the exported DLC for you.
 - **Guide** opens the chair guide.
-- **AVAILABLE CAMPAIGN DLCs** lists folders directly inside `dlc`. Valid entries can be mounted; invalid entries show validation errors. A folder whose name starts with `_` is hidden.
+- **AVAILABLE SCENARIOS** lists validated folders directly inside `dlc`. Valid entries can be mounted; invalid entries show validation errors. A folder whose name starts with `_` is hidden.
 
 ### Top clock and map bar
 
@@ -104,9 +78,7 @@ Use [http://127.0.0.1:5000/zh](http://127.0.0.1:5000/zh) to open the main dashbo
 | `DEFAULT` | Sets the DLC's default simulation speed. |
 | `MAX` | Sets the DLC's maximum allowed speed. |
 | Number + `SET` | Requests a custom speed multiplier. The DLC defines the minimum and maximum; invalid values are rejected. |
-| `Clean` | Dark basemap without labels. Requires its external tile service. |
-| `Topo` | Topographic basemap. Requires its external tile service. |
-| `Admin` | Basemap with administrative labels. Requires its external tile service. |
+| `Local map` | Packaged dark grid basemap with no external map-service dependency. |
 | `Roads` | Shows or hides the DLC road overlay when road data is available. |
 | `Airdrop` | Opens the new-unit deployment panel. |
 | `Zeus` | Opens chair-only edits: modifiers, personnel, cities, province politics, and diplomacy. |
@@ -422,6 +394,7 @@ A DLC is playable only when all of the following are true:
 - It is a normal folder directly under `dlc`, for example `dlc/my_crisis`.
 - The folder name uses only letters, numbers, `_`, `-`, or `.`. A playable folder must not start with `_`.
 - The folder contains five readable JSON object files: `scenario.json`, `rules.json`, `units.json`, `battalions.json`, and `weapons.json`.
+- A legacy folder may stop at those five documents. A versioned pack also contains `package.json`, `objectives.json`, and `events.json`; the manifest declares the exact seven payload files plus its compatibility requirements.
 - `scenario.json` names the scenario, supplies a committee object and diplomacy list, contains a complete map configuration, and points to the units and rules files.
 - `rules.json` uses `schema_version: 1` and retains every scenario-rule section from `_template`. It must **not** contain `orders` or `stances`; those belong to the core.
 - At least one weapon and one battalion type exist. The authoring editor also requires at least one initial unit.
@@ -750,51 +723,21 @@ To deploy a new unit:
 
 The API rejects zero-personnel deployments. After acceptance, the dashboard refreshes immediately, centers the map on the drop zone, and selects the new symbol.
 
-## Creating a DLC
+## Creating a scenario pack
 
-The editor holds unsaved work only in the current browser page. Reloading or closing the editor loses that work. Export intermediate ZIPs while authoring a large scenario.
+Open [http://127.0.0.1:5000/editor](http://127.0.0.1:5000/editor) for the no-code builder. It edits maps, politics, forces, weapons, rules, metadata, chair-assessed objectives, and reusable event cards. **Check Package** runs local checks plus authoritative backend validation. Invalid content cannot be exported.
 
-1. Start CDC Sim and open [http://127.0.0.1:5000/editor](http://127.0.0.1:5000/editor).
-2. Wait for the neutral template to load. **Load Crisis Template** erases the current editor data after confirmation and starts over from `dlc/_template`.
-3. Open **2. Scenario & Map**:
-   - Set the scenario name and description.
-   - Enter map center as **latitude first, longitude second**.
-   - Set bounds with minimum values smaller than maximum values. Longitude is `-180` to `180`; latitude is `-90` to `90`.
-   - Leave the template grid and DEM-analysis resolutions unchanged unless you understand their memory/performance cost.
-   - `Province Name Property` must exactly match the GeoJSON property containing province names.
-   - Optional DEM files are multiple `.tif/.tiff` tiles; roads accept raster or GeoJSON; rivers and provinces accept GeoJSON/JSON.
-   - Add city areas with a unique safe ID, name, center coordinate, non-negative area, and influence from `0` to `1`.
-   - Add one province-politics record for each province/faction pair you want initialized. Names must match the province map and faction spelling exactly.
-4. Open **3. Simulation Rules**:
-   - Adjust only the plain-language common fields unless you understand the engine equations.
-   - `Advanced Rules JSON` is the complete scenario-rule contract. Keep `schema_version` at `1`; do not delete required sections.
-   - Add or change DLC-specific unit types and capability names here.
-   - Never add `orders` or `stances`; the editor and loader reject attempts to override the shared core doctrine.
-   - Click **Apply Advanced JSON** after changing the text. Editing the textarea without applying it does not update the export data.
-5. Open **4. Committee** and fill in committee identity, start date, visibility notes, public briefing, rules of engagement, delegate roles/private briefings, victory conditions, and staff-only notes.
-6. Open **5. Diplomacy**. Put factions that begin allied in the same bloc. Separate member names with commas and use the exact spelling used by units.
-7. Open **7. Battalion Types** before finalizing units:
-   - Add each battalion building block.
-   - `size` is a positive whole-number full complement.
-   - Set armor protection and `armor_generation` separately. `softness` is `0` to `1`, movement supply cost is non-negative, and recon power may be negative.
-   - Assign positive weapon-group quantities. Battalion count × weapon-group quantity determines how many weapon contributions a unit receives.
-   - Capability names are comma-separated and must match behavior names in `rules.json`.
-8. Open **8. Weapons**. Set generation and mission roles, then add near-to-far range bands with explicit soft attack, hard attack, and armor piercing. Check **Indirect fire** only if it may fire without direct terrain line of sight.
-9. Open **6. Units**:
-   - Create at least one initial unit.
-   - Every unit ID must be unique and safe.
-   - Enter exact faction, longitude, latitude, personnel, equipment level, DLC unit type, core starting stance, and battalion counts. The weapon loadout is derived from those battalions.
-   - References are not copied by value: deleting a battalion or weapon still used by a unit makes the package invalid.
-10. Open **9. Military Targets**. Add any sites that should exist at scenario start, or leave the list empty and let players build them. Every target needs a unique safe ID, valid DLC type, owner, coordinates, integrity, and progress from `0` to `1`. An incomplete starting project needs an existing builder if it should be resumable.
-11. Click **Check Package**. Fix every `FIX` result. This browser-side check is helpful but the server's `/status` loader is the final authority.
-12. Click **Export DLC Zip**. JSZip is loaded from a CDN, so ZIP export requires internet unless you vendor that asset locally.
-13. Open the browser's Downloads folder and extract the ZIP.
-14. Move the extracted folder—the one directly containing the five JSON files—into `CDC Sim\dlc\<safe_id>\`.
-15. Use only letters, numbers, `_`, `-`, or `.` in `<safe_id>`. Do not begin a playable DLC ID with `_`.
-16. Restart the server if necessary, open `/status`, and fix every server validation error.
-17. Mount the DLC, verify every unit and map feature, run a short test, reset the scenario, and save a clean Checkpoint 1 before committee day.
+The editor keeps work only in the current browser page, so export intermediate ZIP drafts. A draft contains eight JSON documents and attached map files. It does not contain engine source and it does not include release checksums.
 
-For manual authoring, copy the entire `dlc/_template` folder, rename the copy, and edit the five JSON files with a UTF-8 text editor. Never modify `_template` merely to create one scenario; the browser editor depends on it as the neutral starter.
+For the complete package contract, field limits, authoring workflow, release build commands, versioning, and current commercial limitations, use the [scenario pack authoring guide](docs/scenarios/scenario-pack-format.md). The short release workflow is:
+
+1. Create a new source folder with `python scenario_pack.py init <folder> --id <package-id> --name "<name>" --publisher "<publisher>"`, or extract your own editor draft.
+2. Edit and retain that folder as the source for the pack.
+3. Validate it with `python scenario_pack.py validate <folder>`.
+4. Build an immutable archive with `python scenario_pack.py build <folder> --output <package-id>-<version>.zip`.
+5. Install the validated release under `dlc/` using a distinct folder for each version, verify GIS status, run a committee smoke test, then save a clean starting checkpoint.
+
+Do not modify `_template` to create a scenario. Do not put Python or JavaScript in a pack. A new reusable simulation mechanic requires a reviewed engine capability; scenario content requests the capability through data.
 
 ## Chair operating workflow
 
@@ -826,7 +769,7 @@ After committee:
 - Saving is fully manual. Commands, deployments, committee rulings, chair edits, diplomacy changes, and resets never create or update a save automatically.
 - Mounting a DLC always opens its authored starting state; it never silently resumes an old save.
 - Open **Saves** to view three manual checkpoints. Each card shows whether it is empty, when it was saved, its simulation time, unit count, and any DLC/rules compatibility problem.
-- **Save here** writes an empty checkpoint. **Overwrite** asks for confirmation before replacing an existing checkpoint. Saves are written atomically.
+- **Save here** writes the current state into an empty checkpoint. **Overwrite** asks for confirmation before replacing an existing checkpoint. Saves are written atomically.
 - **Restore** asks for confirmation, replaces the active state, and always leaves the simulation paused.
 - **Reset scenario** is separate from restoring a checkpoint. It returns to the DLC-authored starting state and does not create a backup.
 - Closing the program or changing DLCs discards changes made after the most recent manual save.
@@ -836,29 +779,15 @@ After committee:
 
 ## Security and deployment
 
-The default server listens only on `127.0.0.1`, so only the same computer can connect. This is the safest normal mode.
+The packaged private beta listens only on `127.0.0.1`, so the same computer is the only supported client. Configuration, diagnostics, backups, and scenario content stay local unless the tester deliberately sends an exported file to the beta team. The beta has no automatic telemetry.
 
-To expose it on a trusted local network, open PowerShell in the project folder and run:
+The local application is still a chair-level tool. It does not yet provide named accounts, committee roles, HTTPS, or a security boundary between people who can use that Windows account. Do not expose the beta port to a public network or the internet.
 
-```powershell
-$env:CDC_HOST = "0.0.0.0"
-$env:CDC_PORT = "5000"
-.\.venv\Scripts\python.exe server.py
-```
-
-Then:
-
-1. If Windows Firewall asks, allow access only on the appropriate **Private** network.
-2. On the chair computer, run `ipconfig` and find its IPv4 address, for example `192.168.1.50`.
-3. On another device connected to the same trusted network, open `http://192.168.1.50:5000` using that actual address.
-4. Test from a non-chair device before committee.
-5. Stop with `Ctrl+C` when finished. The environment variables above apply only to that PowerShell window.
-
-There is no login, authentication, HTTPS, CSRF protection, or role-based API permission system. Any person who can reach the server can use chair controls and modify the simulation. Do not port-forward it, place it on public Wi-Fi, or expose it to the public internet. A single chair machine on a private conference network is the intended deployment.
+A source developer can explicitly set both `CDC_ALLOW_REMOTE=true` and a non-loopback `CDC_HOST` for controlled testing. That mode remains unauthenticated and is not the external-beta deployment. Future organization hosting requires the identity, authorization, tenant isolation, TLS, audit, and managed-backup controls in the [licensing-ready architecture](docs/architecture/licensing-ready-architecture.md).
 
 ## Manual install and startup
 
-Use this only if the batch files cannot run. Open PowerShell in the project folder:
+This section is for source developers. Private-beta testers should use the signed Windows installer and the [beta tester guide](docs/beta/beta-tester-guide.md). Use these commands only if the source batch files cannot run. Open PowerShell in the project folder:
 
 ```powershell
 py -3.12 -m venv .venv
@@ -872,9 +801,9 @@ Do not activate the environment unless you want to; calling `.venv\Scripts\pytho
 
 To repair dependencies, run `INSTALL_OR_REPAIR.bat` again. To rebuild only the environment, first preserve DLCs and saves, stop the server, delete only the project's `.venv` folder, and rerun the installer. Never delete the whole project folder as a repair step.
 
-To uninstall CDC Sim, stop the server and delete the project folder after copying out any custom DLC folders, `save_slot_*.json` files, battle logs, and exported SITREPs you want to keep. The installer does not create a Windows service or install CDC Sim globally.
+To remove a source checkout, stop the server and delete the project folder after preserving custom scenarios and external backups. The packaged beta has a normal Windows uninstaller and retains customer data under `%LOCALAPPDATA%\CDC Sim` for recovery.
 
-The current dashboard also loads Leaflet, map tiles, and JSZip from external services. A fully offline conference deployment must vendor those assets and provide offline tiles.
+Leaflet and JSZip are bundled locally with their required permissive-license notices. The generated local map works offline. A future scenario pack may add separately licensed map data only after its commercial-use and redistribution rights are recorded.
 
 ## Tests
 
@@ -890,7 +819,7 @@ For a package-level check, open **/status**. Invalid DLC cards show their valida
 
 ## Troubleshooting
 
-### Double-clicking the installer immediately fails
+### Double-clicking the source setup script immediately fails
 
 Open Command Prompt and run `py -0p`. Python 3.12 must appear. If it does not, install 64-bit Python 3.12, enable the launcher/PATH options, reopen the project folder, and run the installer again. Python 3.14 being installed does not satisfy the pinned Python 3.12 environment.
 
@@ -912,7 +841,7 @@ Use **.venv\Scripts\python.exe**, not a machine-wide Python installation. Run **
 
 ### The dashboard opens but the map is blank
 
-The application shell comes from the local server, but Leaflet and basemap tiles come from external CDNs. Confirm internet access and disable overly strict content blocking for this local page. Also check the browser developer console if you know how. Unit and simulation data can still exist even when external tiles fail.
+Reload the readiness page first. The application shell, Leaflet, and local grid map are packaged with the application. Review **LOCAL GIS FEATURES** for scenario-data warnings, then copy diagnostics from the readiness page if the local map or controls still fail.
 
 ### A DLC does not appear
 
@@ -964,9 +893,9 @@ Configured-but-unreadable packages are marked in red in the top-left GIS panel. 
 - Read the rejection message instead of dismissing it; the server will not accept an invisible zero-strength unit.
 - If the request succeeds but the map does not refresh, reload the dashboard and open **/status** to check the mounted package.
 
-### The map or ZIP export is unavailable
+### The map or scenario ZIP export is unavailable
 
-The current UI uses external CDN assets. Confirm internet access, reload the page, and open **/status**. This does not affect backend DLC validation.
+Reload the page and open **/status**. Leaflet and JSZip are bundled locally, so this indicates a damaged installation, a blocked local browser resource, or an application error rather than a missing CDN. Use **Copy diagnostics** on the readiness page and repair or reinstall the signed beta.
 
 ### A command button appears to do nothing
 
@@ -990,11 +919,16 @@ This is expected when no manual checkpoint was written. Mount the correct DLC, o
 | **doctrine.py** | Universal tactical orders, combat stances, and interaction policy |
 | **gis.py** | DEM, terrain, roads, rivers, pathfinding, provinces |
 | **dlc_loader.py** | Safe paths and complete package/rules validation |
+| **scenario_package.py** | Versioned data-only manifest, objectives/events, file inventory, and checksums |
+| **scenario_pack.py** | Create, validate, inspect, and build commands for distributable scenario packs |
+| **beta_runtime.py** | Validated configuration, version data, rotating logs, and privacy-bounded diagnostics |
+| **beta_backup.py** | Validated external checkpoint backup and transactional recovery |
 | **templates/** | Dashboard, editor, readiness page, chair guides |
-| **static/** | Browser logic and styling |
-| **dlc/_template/** | Neutral schema version 1 starter |
-| **dlc/afghan/** | Example historical scenario DLC |
-| **tests/** | Regression suite |
+| **static/** | Browser logic, styling, and locally bundled browser dependencies/notices |
+| **dlc/_template/** | Neutral versioned scenario starter |
+| **deployment/windows/** | Private-beta executable/installer workflow and release policy checks |
+| **docs/** | Migration, architecture, IP risk, scenario authoring, and beta operations |
+| **tests/** | Engine, package, runtime, recovery, server, and browser-authoring regression suite |
 
 ## Design rules for contributors
 

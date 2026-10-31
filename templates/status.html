@@ -3,60 +3,152 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>CDC Sim Status</title>
+    <title>{{ build.product }} readiness</title>
     <style>
-        :root { color-scheme: dark; font-family: "Segoe UI", Arial, sans-serif; }
+        :root { color-scheme: dark; font-family: "Segoe UI","Microsoft YaHei",Arial,sans-serif; }
         body { margin:0; min-height:100vh; display:grid; place-items:center; background:#050a0f; color:#c9d1d9; }
-        main { width:min(680px, calc(100vw - 40px)); background:#0d1117; border:1px solid #30363d; border-radius:10px; padding:24px; box-shadow:0 18px 60px #0008; }
+        main { width:min(760px, calc(100vw - 40px)); background:#0d1117; border:1px solid #30363d; border-radius:10px; padding:24px; box-shadow:0 18px 60px #0008; }
         h1 { margin:0 0 6px; color:#fff; font-size:24px; }
         .sub { color:#8b949e; margin-bottom:20px; }
         .summary { border:1px solid #30363d; border-left:4px solid #e3b341; background:#010409; padding:14px; border-radius:6px; margin-bottom:14px; }
         .summary.ok { border-left-color:#2ea043; }
+        .summary.warning { border-left-color:#e3b341; }
         .summary.error { border-left-color:#f85149; }
         .grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:10px; }
         .card { border:1px solid #30363d; background:#010409; padding:12px; border-radius:6px; }
         .label { color:#8b949e; font-size:12px; margin-bottom:4px; }
         .value { color:#fff; overflow-wrap:anywhere; }
-        ul { margin:8px 0 0; padding-left:20px; }
+        ul { margin:12px 0 0; padding-left:20px; line-height:1.5; }
         a, button { display:inline-block; margin-top:18px; margin-right:8px; color:#fff; background:#1f6feb; border:1px solid #58a6ff; border-radius:5px; padding:8px 12px; text-decoration:none; cursor:pointer; }
         button { background:#21262d; border-color:#8b949e; }
+        button:disabled, a[aria-disabled="true"] { cursor:not-allowed; opacity:.5; }
+        #diagnostic-status { color:#8b949e; font-size:12px; min-height:18px; margin-top:10px; }
     </style>
 </head>
 <body>
 <main>
-    <h1>CDC Sim readiness check</h1>
-    <div class="sub">A quick pre-committee check of the local server, dependencies, and scenario packages.</div>
+    <h1 id="page-title">{{ build.product }} readiness</h1>
+    <div id="page-subtitle" class="sub">Run this readiness check before starting a committee.</div>
     <div id="summary" class="summary">Checking the simulator…</div>
     <div class="grid">
-        <div class="card"><div class="label">Python</div><div id="python" class="value">—</div></div>
-        <div class="card"><div class="label">Environment</div><div id="venv" class="value">—</div></div>
-        <div class="card"><div class="label">DLC packages</div><div id="dlcs" class="value">—</div></div>
+        <div class="card"><div id="version-label" class="label">Installed version</div><div id="version" class="value">{{ build.version }}</div></div>
+        <div class="card"><div id="channel-label" class="label">Release channel</div><div id="channel" class="value">{{ build.channel }}</div></div>
+        <div class="card"><div id="build-label" class="label">Build ID</div><div id="build-id" class="value">{{ build.build_id }}</div></div>
+        <div class="card"><div id="scenarios-label" class="label">Scenarios</div><div id="scenarios" class="value">—</div></div>
+        <div class="card"><div id="storage-label" class="label">User data storage</div><div id="storage" class="value">Checking…</div></div>
     </div>
     <div id="details"></div>
-    <a href="/">Open dashboard</a><button type="button" onclick="runCheck()">Check again</button>
+    <a id="open-dashboard" href="/" onclick="if (this.getAttribute('aria-disabled') === 'true') return false;">Open CDC Sim</a>
+    <button id="check-again" type="button" onclick="runCheck()">Check again</button>
+    <button id="copy-diagnostics" type="button" onclick="copyDiagnostics()">Copy diagnostics</button>
+    <button id="language-toggle" type="button" onclick="toggleLanguage()">中文</button>
+    <div id="diagnostic-status" role="status" aria-live="polite"></div>
 </main>
 <script>
+let lastScenarioCounts = {ready: 0, invalid: 0};
+const requestedLanguage = new URLSearchParams(window.location.search).get('lang');
+const requestedLocale = requestedLanguage === 'zh' || requestedLanguage === 'en' ? requestedLanguage : null;
+let currentLanguage = requestedLocale || (localStorage.getItem('cdc_lang') === 'zh' ? 'zh' : 'en');
+if (requestedLocale) localStorage.setItem('cdc_lang', requestedLocale);
+const strings = {
+    en: {
+        htmlLang: 'en', title: '{{ build.product }} readiness', heading: '{{ build.product }} readiness',
+        subtitle: 'Run this readiness check before starting a committee.', checking: 'Checking the simulator…',
+        version: 'Installed version', channel: 'Release channel', build: 'Build ID', scenarios: 'Scenarios', storage: 'User data storage',
+        open: 'Open CDC Sim', again: 'Check again', copy: 'Copy diagnostics', toggle: '中文',
+        serviceError: 'The local readiness service did not respond correctly.', ready: 'Ready to play.',
+        warning: 'Ready to play. One or more unused scenarios need attention.', attention: 'Attention is needed before CDC Sim can start.',
+        unknown: 'Unknown', scenarioCount: (ready, invalid) => `${ready} ready, ${invalid} invalid`, available: 'Ready', unavailable: 'Unavailable',
+        dependencies: 'Application components are missing. Reinstall this build.', content: 'The scenario content directory cannot be read.',
+        dataStorage: 'User data storage is not writable.', noScenario: 'No valid scenario is installed.', checkFailed: message => `Readiness check failed: ${message}`,
+        preparing: 'Preparing privacy-safe diagnostics…', requestFailed: status => `Request failed (${status}).`,
+        copied: 'Diagnostics copied. Paste them into your support message.', copyFailed: message => `Could not copy diagnostics: ${message}`
+    },
+    zh: {
+        htmlLang: 'zh-CN', title: '{{ build.product }} 就绪检查', heading: '{{ build.product }} 就绪检查',
+        subtitle: '委员会开始前，请先运行此检查。', checking: '正在检查模拟器…',
+        version: '已安装版本', channel: '发布渠道', build: '构建编号', scenarios: '剧本', storage: '用户数据存储',
+        open: '打开 CDC Sim', again: '重新检查', copy: '复制诊断信息', toggle: 'English',
+        serviceError: '本地就绪检查服务未正常响应。', ready: '已经就绪，可以开始。',
+        warning: '已经就绪，但有一个或多个未使用的剧本需要处理。', attention: 'CDC Sim 启动前还有问题需要处理。',
+        unknown: '未知', scenarioCount: (ready, invalid) => `${ready} 个可用，${invalid} 个无效`, available: '可用', unavailable: '不可用',
+        dependencies: '应用组件缺失，请重新安装此版本。', content: '无法读取剧本内容目录。',
+        dataStorage: '用户数据存储位置不可写。', noScenario: '没有安装有效剧本。', checkFailed: message => `就绪检查失败：${message}`,
+        preparing: '正在准备不含隐私信息的诊断报告…', requestFailed: status => `请求失败（${status}）。`,
+        copied: '诊断信息已复制，请粘贴到支持消息中。', copyFailed: message => `无法复制诊断信息：${message}`
+    }
+};
+
+function t() { return strings[currentLanguage]; }
+
+function applyLanguage() {
+    const text = t();
+    document.documentElement.lang = text.htmlLang;
+    document.title = text.title;
+    document.getElementById('page-title').textContent = text.heading;
+    document.getElementById('page-subtitle').textContent = text.subtitle;
+    document.getElementById('version-label').textContent = text.version;
+    document.getElementById('channel-label').textContent = text.channel;
+    document.getElementById('build-label').textContent = text.build;
+    document.getElementById('scenarios-label').textContent = text.scenarios;
+    document.getElementById('storage-label').textContent = text.storage;
+    const dashboardLink = document.getElementById('open-dashboard');
+    dashboardLink.textContent = text.open;
+    dashboardLink.href = currentLanguage === 'zh' ? '/zh' : '/';
+    document.getElementById('check-again').textContent = text.again;
+    document.getElementById('copy-diagnostics').textContent = text.copy;
+    document.getElementById('language-toggle').textContent = text.toggle;
+}
+
+function toggleLanguage() {
+    currentLanguage = currentLanguage === 'zh' ? 'en' : 'zh';
+    localStorage.setItem('cdc_lang', currentLanguage);
+    const url = new URL(window.location.href);
+    url.searchParams.set('lang', currentLanguage);
+    window.history.replaceState(null, '', url);
+    applyLanguage();
+    runCheck();
+}
+
 async function runCheck() {
+    const text = t();
     const summary = document.getElementById('summary');
+    const openButton = document.getElementById('open-dashboard');
     summary.className = 'summary';
-    summary.textContent = 'Checking the simulator…';
+    summary.textContent = text.checking;
+    openButton.setAttribute('aria-disabled', 'true');
     try {
-        const [healthResponse, dlcResponse] = await Promise.all([fetch('/api/health'), fetch('/api/list_dlcs')]);
-        if (!healthResponse.ok || !dlcResponse.ok) throw new Error('The status API did not respond correctly.');
+        const [healthResponse, scenarioResponse] = await Promise.all([fetch('/api/health'), fetch('/api/list_dlcs')]);
+        if (!healthResponse.ok || !scenarioResponse.ok) throw new Error(text.serviceError);
         const health = await healthResponse.json();
-        const dlcs = await dlcResponse.json();
-        const missing = Object.entries(health.packages || {}).filter(([, installed]) => !installed).map(([name]) => name);
-        const invalid = dlcs.filter(dlc => !dlc.valid);
-        const ready = health.status === 'ok' && missing.length === 0 && dlcs.some(dlc => dlc.valid) && invalid.length === 0;
-        summary.className = `summary ${ready ? 'ok' : 'error'}`;
-        summary.textContent = ready ? 'Ready for committee use.' : 'Attention is needed before committee starts.';
-        document.getElementById('python').textContent = health.python || 'Unknown';
-        document.getElementById('venv').textContent = health.venv || 'Unknown';
-        document.getElementById('dlcs').textContent = `${dlcs.filter(dlc => dlc.valid).length} ready, ${invalid.length} invalid`;
+        const scenarios = await scenarioResponse.json();
+        const invalid = scenarios.filter(scenario => !scenario.valid);
+        const valid = scenarios.filter(scenario => scenario.valid);
+        lastScenarioCounts = {ready: valid.length, invalid: invalid.length};
+        const checks = health.checks || {};
+        const coreReady = health.status === 'ok' && Object.values(checks).every(Boolean);
+        const ready = coreReady && valid.length > 0;
+        const warning = ready && invalid.length > 0;
+        summary.className = `summary ${ready ? (warning ? 'warning' : 'ok') : 'error'}`;
+        summary.textContent = ready ? (warning ? text.warning : text.ready) : text.attention;
+        openButton.setAttribute('aria-disabled', String(!ready));
+        document.getElementById('version').textContent = health.build?.version || text.unknown;
+        document.getElementById('channel').textContent = health.build?.channel || text.unknown;
+        document.getElementById('build-id').textContent = health.build?.build_id || text.unknown;
+        document.getElementById('scenarios').textContent = text.scenarioCount(valid.length, invalid.length);
+        document.getElementById('storage').textContent = checks.data_storage ? text.available : text.unavailable;
+
         const messages = [];
-        if (missing.length) messages.push(`Missing packages: ${missing.join(', ')}`);
-        if (!dlcs.some(dlc => dlc.valid)) messages.push('No valid DLC package is available.');
-        invalid.forEach(dlc => messages.push(`${dlc.name}: ${(dlc.errors || []).join('; ')}`));
+        if (!checks.dependencies) messages.push(text.dependencies);
+        if (!checks.content) messages.push(text.content);
+        if (!checks.data_storage) messages.push(text.dataStorage);
+        if (!valid.length) messages.push(text.noScenario);
+        invalid.forEach(scenario => {
+            const details = (scenario.errors || []).join('; ');
+            messages.push(currentLanguage === 'zh'
+                ? `${scenario.name}：剧本包验证失败。技术详情：${details}`
+                : `${scenario.name}: ${details}`);
+        });
         const details = document.getElementById('details');
         details.replaceChildren();
         if (messages.length) {
@@ -66,9 +158,32 @@ async function runCheck() {
         }
     } catch (error) {
         summary.className = 'summary error';
-        summary.textContent = `Status check failed: ${error.message}`;
+        summary.textContent = text.checkFailed(error.message);
+        openButton.setAttribute('aria-disabled', 'true');
     }
 }
+
+async function copyDiagnostics() {
+    const text = t();
+    const status = document.getElementById('diagnostic-status');
+    status.textContent = text.preparing;
+    try {
+        const response = await fetch('/api/support_diagnostics', {
+            method: 'POST', headers: {'X-CDC-Requested-With': 'CDC-Sim-UI'}
+        });
+        const data = await response.json();
+        if (!response.ok || data.status !== 'ok') {
+            throw new Error((currentLanguage === 'zh' && data.msg_zh) || data.msg || text.requestFailed(response.status));
+        }
+        const report = {...data.diagnostics, scenario_counts: lastScenarioCounts};
+        await navigator.clipboard.writeText(JSON.stringify(report, null, 2));
+        status.textContent = text.copied;
+    } catch (error) {
+        status.textContent = text.copyFailed(error.message);
+    }
+}
+
+applyLanguage();
 runCheck();
 </script>
 </body>

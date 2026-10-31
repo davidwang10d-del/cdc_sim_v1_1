@@ -1,14 +1,13 @@
 import os
 import argparse
 import numpy as np
-import requests
 try:
     import rasterio
     from rasterio.plot import show
     import matplotlib.pyplot as plt
     from matplotlib.colors import ListedColormap
 except ImportError:
-    print("🚨 请先安装依赖: pip install rasterio matplotlib numpy requests")
+    print("🚨 请先安装依赖: pip install rasterio matplotlib numpy")
     exit()
 
 # ==========================================
@@ -78,77 +77,16 @@ def scan_local_dem(tif_path, output_file=None, show_plot=True):
         else:
             plt.close(fig)
 
-# ==========================================
-# 模块 2：军工级无缝高程图下载 (OpenTopography)
-# ==========================================
-def download_void_filled_dem(min_lon, min_lat, max_lon, max_lat, output_file, api_key):
-    """
-    使用 OpenTopography API 下载 SRTM GL3 (90m) 或 GL1 (30m)。
-    由于 SRTM GL 系列是经过算法填补的 (Void-Filled)，不会出现 0 米黑洞。
-    """
-    print(f"\n🛰️ [卫星上行链路] 正在请求全新的无缝高程扫描阵列...")
-    
-    # SRTMGL1 是 30m 精度, SRTMGL3 是 90m 精度。如果没有 API 密钥，可能会受到限制。
-    dataset = "SRTMGL3" # 测试时建议先用 GL3 确保能下下来
-    
-    url = "https://portal.opentopography.org/API/globaldem"
-    params = {
-        "demtype": dataset,
-        "south": min_lat,
-        "north": max_lat,
-        "west": min_lon,
-        "east": max_lon,
-        "outputFormat": "GTiff",
-        "API_Key": api_key
-    }
-
-    try:
-        response = requests.get(url, params=params, stream=True, timeout=(10, 180))
-        if response.status_code == 200:
-            with open(output_file, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    f.write(chunk)
-            print(f"✅ [下载完成] 完美的无缝高程图已保存至: {output_file}")
-            # 下载完顺便给它做个体检
-            scan_local_dem(output_file)
-        else:
-            print(f"❌ [下载失败] HTTP 状态码: {response.status_code}")
-            print("如果提示需要 API Key，请前往 https://opentopography.org/ 免费注册一个并填入代码中。")
-    except Exception as e:
-        print(f"❌ [网络异常] {e}")
-
-
 def build_parser():
-    parser = argparse.ArgumentParser(description="Inspect or download a DEM for any CDC Sim DLC.")
-    subparsers = parser.add_subparsers(dest="command", required=True)
-
-    scan_parser = subparsers.add_parser("scan", help="Inspect a local GeoTIFF")
-    scan_parser.add_argument("tif_path")
-    scan_parser.add_argument("--output", help="Save the diagnostic image instead of only showing it")
-    scan_parser.add_argument("--no-show", action="store_true", help="Do not open a plot window")
-
-    download_parser = subparsers.add_parser("download", help="Download an OpenTopography DEM")
-    download_parser.add_argument("--min-lon", type=float, required=True)
-    download_parser.add_argument("--min-lat", type=float, required=True)
-    download_parser.add_argument("--max-lon", type=float, required=True)
-    download_parser.add_argument("--max-lat", type=float, required=True)
-    download_parser.add_argument("--output", required=True)
-    download_parser.add_argument("--api-key", required=True)
+    parser = argparse.ArgumentParser(
+        description="Inspect a locally supplied GeoTIFF whose commercial-use and redistribution rights have been approved."
+    )
+    parser.add_argument("tif_path")
+    parser.add_argument("--output", help="Save the diagnostic image")
+    parser.add_argument("--no-show", action="store_true")
     return parser
 
 
 if __name__ == "__main__":
     args = build_parser().parse_args()
-    if args.command == "scan":
-        scan_local_dem(args.tif_path, output_file=args.output, show_plot=not args.no_show)
-    else:
-        if args.min_lon >= args.max_lon or args.min_lat >= args.max_lat:
-            raise SystemExit("Invalid bounds: minimum values must be lower than maximum values")
-        download_void_filled_dem(
-            min_lon=args.min_lon,
-            min_lat=args.min_lat,
-            max_lon=args.max_lon,
-            max_lat=args.max_lat,
-            output_file=args.output,
-            api_key=args.api_key,
-        )
+    scan_local_dem(args.tif_path, output_file=args.output, show_plot=not args.no_show)

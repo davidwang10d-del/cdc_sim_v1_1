@@ -20,3 +20,7 @@ dlc/**/maps/*.tif
 
 # Local campaign data
 dlc/afghan/
+# Local Windows release outputs
+deployment/windows/.build/
+deployment/windows/artifacts/
+deployment/windows/installer-smoke/

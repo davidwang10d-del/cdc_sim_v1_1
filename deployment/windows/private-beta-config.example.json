@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "profile": "private-beta",
+  "host": "127.0.0.1",
+  "port": 5000,
+  "log_level": "INFO",
+  "log_max_bytes": 5242880,
+  "log_backup_count": 5,
+  "open_browser": true,
+  "allow_remote": false
+}

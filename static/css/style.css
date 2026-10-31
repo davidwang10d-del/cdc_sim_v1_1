@@ -1,7 +1,7 @@
 /* =========================================
    Base Layout & Map Canvas
    ========================================= */
-body { margin: 0; padding: 0; background-color: #050a0f; color: #a5d6ff; font-family: 'Courier New', Courier, monospace; overflow: hidden; user-select: none; }
+body { margin: 0; padding: 0; background-color: #050a0f; color: #a5d6ff; font-family: 'Courier New', Courier, 'Microsoft YaHei UI', 'Microsoft YaHei', monospace; overflow: hidden; user-select: none; }
 #map { width: 100vw; height: 100vh; z-index: 1; background: #000; }
 
 /* =========================================
@@ -156,6 +156,42 @@ body { margin: 0; padding: 0; background-color: #050a0f; color: #a5d6ff; font-fa
 .installation-icon.destroyed > div { filter: grayscale(1); border-color: #6e7681; color: #6e7681 !important; opacity: .6; box-shadow: none; }
 .installation-icon.selected-installation > div { border-width: 2px; box-shadow: 0 0 15px var(--installation-color), inset 0 0 8px color-mix(in srgb, var(--installation-color) 35%, transparent); }
 
+.nearby-selection-panel {
+    position: fixed;
+    width: min(360px, calc(100vw - 24px));
+    max-height: min(430px, calc(100vh - 24px));
+    padding: 12px;
+    box-sizing: border-box;
+    overflow-y: auto;
+    z-index: 1110;
+}
+.nearby-selection-panel[hidden] { display: none; }
+.nearby-selection-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.nearby-selection-header .panel-title { flex: 1; margin-bottom: 6px; }
+.nearby-selection-help { color: #8b949e; font-size: 10px; line-height: 1.4; margin-bottom: 9px; }
+.nearby-selection-list { display: flex; flex-direction: column; gap: 6px; }
+.nearby-selection-option {
+    width: 100%;
+    min-height: 50px;
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr);
+    align-items: center;
+    gap: 9px;
+    padding: 7px 9px;
+    border: 1px solid #30363d;
+    border-radius: 3px;
+    background: rgba(0,0,0,.5);
+    color: #c9d1d9;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.nearby-selection-option:hover, .nearby-selection-option:focus-visible { border-color: #58a6ff; background: rgba(31,111,235,.13); outline: none; box-shadow: 0 0 8px rgba(88,166,255,.35); }
+.nearby-selection-icon { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 1px solid currentColor; background: rgba(3,7,11,.86); font-size: 18px; font-weight: bold; text-shadow: 0 0 5px #000; }
+.nearby-selection-copy { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.nearby-selection-copy strong { overflow: hidden; color: #fff; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.nearby-selection-copy small { color: #8b949e; font-size: 9px; line-height: 1.35; }
+
 /* Highlight effect for selected unit */
 .selected-unit { border: 1px solid #58a6ff; border-radius: 50%; width: 30px !important; height: 30px !important; line-height: 28px; background: radial-gradient(circle, rgba(88,166,255,0.4) 0%, rgba(0,0,0,0) 70%); box-shadow: 0 0 15px #58a6ff; }
 
@@ -176,6 +212,9 @@ body { margin: 0; padding: 0; background-color: #050a0f; color: #a5d6ff; font-fa
 .leaflet-bottom.leaflet-left { margin-bottom: 140px; margin-left: 15px; }
 .leaflet-control-scale-line { border: 2px solid #58a6ff; border-top: none; color: #a5d6ff; background: rgba(0,0,0,0.7); box-shadow: 0 0 5px #000; font-weight: bold; padding: 2px 5px; }
 #map .leaflet-zoom-box { display: none !important; }
+/* Province polygons show information but are not selectable objects. Suppress
+   the browser's rectangular SVG focus frame after a mouse click. */
+#map .province-boundary:focus { outline: none !important; }
 #map.targeting-mode { cursor: crosshair; }
 #map .admin-basemap { filter: brightness(.42) saturate(.55) contrast(1.2); }
 #map .topo-basemap { filter: brightness(.5) saturate(.65) contrast(1.15); }
@@ -296,3 +335,12 @@ body { margin: 0; padding: 0; background-color: #050a0f; color: #a5d6ff; font-fa
 @media (max-width: 720px) {
     .gis-status-panel { top: 120px; width: min(230px, calc(100vw - 30px)); }
 }
+
+#connection-banner { position:fixed; top:10px; left:50%; transform:translateX(-50%); z-index:100000; max-width:min(680px,calc(100vw - 30px)); padding:10px 12px; border:1px solid #f85149; border-radius:6px; background:#2d0d12d; color:#ffb3ad; box-shadow:0 10px 30px #000a; font-size:12px; }
+#connection-banner[hidden] { display:none; }
+.map-source-label { color:#7ee787; border:1px solid #238636; border-radius:4px; padding:4px 8px; font-size:11px; white-space:nowrap; }
+#connection-banner button, #connection-banner a { margin-left:10px; color:#fff; background:#21262d; border:1px solid #8b949e; border-radius:4px; padding:4px 8px; text-decoration:none; cursor:pointer; }
+.backup-section { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:10px; padding:9px; border:1px solid #30363d; background:#010409; }
+.backup-section > div:first-child { display:flex; flex-direction:column; gap:3px; color:#8b949e; font-size:10px; line-height:1.4; }
+.backup-section strong { color:#fff; font-size:11px; }
+@media (max-width: 720px) { .backup-section { align-items:stretch; flex-direction:column; } }

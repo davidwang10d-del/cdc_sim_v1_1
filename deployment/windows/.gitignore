@@ -1,0 +1,4 @@
+/.build/
+/artifacts/
+/generated/
+*.local.json

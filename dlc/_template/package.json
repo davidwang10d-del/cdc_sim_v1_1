@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "id": "new-crisis",
+  "version": "1.0.0",
+  "name": "New MUN Crisis",
+  "description": "A custom MUN crisis scenario.",
+  "publisher": "Your organization",
+  "license": "Specify your distribution terms before publishing.",
+  "engine_api_version": 1,
+  "required_capabilities": [
+    "chair_events.v1",
+    "chair_objectives.v1"
+  ],
+  "files": {
+    "scenario": "scenario.json",
+    "rules": "rules.json",
+    "units": "units.json",
+    "weapons": "weapons.json",
+    "battalions": "battalions.json",
+    "objectives": "objectives.json",
+    "events": "events.json"
+  }
+}

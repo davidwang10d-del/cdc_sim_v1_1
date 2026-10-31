@@ -1,0 +1,5 @@
+# Builder-only dependencies. Application dependencies remain in ../../requirements.txt.
+# Keep these exact pins in sync with the artifact dependency inventory.
+setuptools==84.0.0
+wheel==0.48.0
+PyInstaller==6.22.2
